@@ -1,0 +1,17 @@
+{
+  "$schema": "../../shared/schema/plugin.json.schema.v1.json",
+  "schemaVersion": 1,
+  "id": "com.queryeer.mongodb",
+  "name": "MongoDB",
+  "version": "0.1.0",
+  "description": "Native MongoDB query engine for Queryeer Desktop",
+  "backend": {
+    "entrypointClass": "com.queryeer.plugin.mongodb.MongoBackendPlugin",
+    "minJavaVersion": "25"
+  },
+  "frontend": {
+    "entryModule": "./frontend/dist/index.js",
+    "moduleFormat": "esm",
+    "apiVersion": "^0.19.0"
+  }
+}
