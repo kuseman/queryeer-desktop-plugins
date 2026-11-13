@@ -1,0 +1,101 @@
+name: MongoDB plugin
+
+# Builds and tests only when the MongoDB plugin or something it is built with changes
+on:
+  push:
+    branches:
+      - "**"
+    paths: &paths
+      - "plugins/mongodb/**"
+      - "shared/**"
+      - "pom.xml"
+      - "mvnw"
+      - "mvnw.cmd"
+      - ".mvn/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/mongodb.yml"
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: "kuseman/queryeer-desktop branch, tag or commit to build the plugin API from"
+        required: false
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+  # The plugin API (backend-api, backend-contract, @queryeer/api 0.19.0) is not published yet, so CI builds it from
+  # the core repository at this ref. Once 0.19.0 is on Maven Central and npm, drop the core steps below.
+  CORE_REF: ${{ inputs.core_ref || 'api_surface_fixes' }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mongodb:
+    name: MongoDB plugin
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: queryeer-desktop-plugins
+    steps:
+      # Same layout as a local checkout: frontend/package.json links @queryeer/api from
+      # ../queryeer-desktop/development/queryeer-desktop/packages/api, relative to this repository's root.
+      - name: Checkout plugins
+        uses: actions/checkout@v4
+        with:
+          path: queryeer-desktop-plugins
+
+      - name: Checkout core (${{ env.CORE_REF }})
+        uses: actions/checkout@v4
+        with:
+          repository: kuseman/queryeer-desktop
+          ref: ${{ env.CORE_REF }}
+          path: queryeer-desktop/development
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: zulu
+          cache: maven
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: |
+            queryeer-desktop-plugins/package-lock.json
+            queryeer-desktop/development/queryeer-desktop/package-lock.json
+
+      - name: Install core backend API into the local Maven repository
+        working-directory: queryeer-desktop/development
+        run: sh queryeer-backend/mvnw -B -f queryeer-backend/pom.xml -pl backend-api,backend-contract -am install -DskipTests
+
+      - name: Build core @queryeer/api
+        working-directory: queryeer-desktop/development/queryeer-desktop
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run -w @queryeer/api build
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Frontend typecheck and unit tests, then backend unit and Testcontainers tests (Docker is available on ubuntu-latest)
+      - name: Test
+        run: npm run mongodb:test
+
+      - name: Package and verify
+        run: npm run mongodb:package
+
+      - name: Upload plugin package
+        uses: actions/upload-artifact@v4
+        with:
+          name: com.queryeer.mongodb
+          path: |
+            queryeer-desktop-plugins/dist/*.zip
+            queryeer-desktop-plugins/dist/*.zip.sha256
+          if-no-files-found: error

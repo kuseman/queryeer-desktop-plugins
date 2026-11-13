@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.queryeer.plugins</groupId>
+        <artifactId>queryeer-desktop-plugins</artifactId>
+        <version>0-SNAPSHOT</version>
+        <relativePath>../../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>queryeer-mongodb-plugin</artifactId>
+    <!-- Must match "version" in ../plugin.json -->
+    <version>0.1.0</version>
+    <name>Queryeer MongoDB Plugin (backend)</name>
+
+    <properties>
+        <mongodb.driver.version>5.9.1</mongodb.driver.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.queryeer.backend</groupId>
+            <artifactId>backend-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.queryeer.backend</groupId>
+            <artifactId>backend-contract</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.mongodb</groupId>
+            <artifactId>mongodb-driver-sync</artifactId>
+            <version>${mongodb.driver.version}</version>
+        </dependency>
+
+        <!-- TEST -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <!-- Runtime dependencies end up in target/lib and are packaged into the plugin ZIP's lib/ -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-runtime-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                            <includeScope>runtime</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>

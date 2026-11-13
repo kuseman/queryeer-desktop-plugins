@@ -4,7 +4,23 @@ Native MongoDB query-engine support for Queryeer Desktop.
 
 ## Status
 
-This repository is an initial scaffold. The design for the first milestone is agreed (see [Design](#design)). Implementation should begin by proving the complete local plugin lifecycle before adding GitHub Releases integration to Queryeer Desktop.
+The first-milestone design is agreed (see [Design](#design)).
+
+**Backend: implemented and tested.** This covers the engine, connections, query language, results, errors, cancellation, timeouts and packaging.
+- It is tested with unit tests, Testcontainers tests against `mongo:7.0`, and an end-to-end smoke test in Queryeer's real backend runner.
+
+**Frontend: implemented, not yet run in the Queryeer app.** It covers:
+- the `.mongo` file type
+- engine registration
+- the connections settings editor, with a **Test connection** button
+- a **MongoDB** sidebar view for MongoDB files, with connection and database pickers, plus a read-only "connection | database" label in the query editor status bar
+- the execution-context provider
+
+It builds against the local core checkout's `@queryeer/api` through a `file:` dependency, until `@queryeer/api` 0.19.0 is published. Then change `plugins/mongodb/frontend/package.json` to `"@queryeer/api": "^0.19.0"`.
+
+Missing host APIs found along the way are tracked in [API-GAPS.md](../../API-GAPS.md).
+
+GitHub Releases integration in Queryeer Desktop comes after the complete local plugin lifecycle is proven.
 
 The plugin depends on public plugin APIs added to Queryeer Desktop in `@queryeer/api` 0.19.0:
 
@@ -93,17 +109,43 @@ Agreed design for the first milestone. It targets the Queryeer plugin APIs in `@
   - `context.files.registerMimeResolver`
   - `context.queryEngines.registerEngine({ engineId: "mongodb", mimeTypes: [...] })`
   - `context.editorLanguages.registerMimeType(mime, "json")`
-- Connection: `context.fileMediator.bindEngine(fileId, "mongodb", connectionId)`. The backend receives it through its `FileSessionHandler` file session.
+- Connection: `context.fileMediator.bindEngine(fileId, "mongodb", connectionId)`.
+  - The execution-context provider sends the bound connection with every execution as `engineState.connectionId`, as JDBC does.
+  - That is the source the backend trusts. The host opens the backend file session only on the first bind, so a later rebind never reaches the `FileSessionHandler`.
+  - The backend falls back to the file session's connection only when `engineState` has none.
 - Database: the selected database is stored per file with `context.files.setEditorState`. It is attached to each execution as `engineState.database` through `context.queryEngines.registerExecutionContextProvider("mongodb", ...)`.
-- `context.queryEngines.onQueryEvent("mongodb", ...)` reads `engineState` back from completed executions, so the UI stays in sync.
-- Connection and database pickers are status items registered with `context.queryEngines.registerEditorStatusItem({ engineId: "mongodb", ... })`.
-- Every registration returns a `Disposable`, which is disposed in `deactivate`.
+- Backend `invoke` actions:
+  - `mongodb.databases`: lists database names.
+  - `mongodb.ping`: returns `{ ok, version }`.
+  - Both take `{ connectionId }` or `{ engineState }` in the payload. The host wraps the return value as `result.result`.
+- `context.queryEngines.onQueryEvent("mongodb", ...)` is not used yet. The backend returns no `engineState` patch, because the frontend already owns the connection and database selection.
+- Connection and database pickers live in a **MongoDB** sidebar view: `layout.registerView({ when: "activeFile?.mimeType == 'application/vnd.queryeer.mongodb'" })`. That is the same pattern as JDBC's "SQL Databases" view, and the explorer tree lives there too (see [TODO.md](TODO.md)). A read-only "connection | database" label goes in the query editor status bar through `context.queryEngines.registerEditorStatusItem({ engineId: "mongodb", ... })`, like JDBC's.
+  - Database lists are cached per connection and fetched silently, so switching tabs never triggers a vault prompt. The refresh button fetches interactively.
+- State, following the same split as JDBC:
+
+  | State | Where it lives | Survives a restart? |
+  |---|---|---|
+  | A file's connection | `engineBinding` | Yes, saved in the workspace |
+  | A file's selected database | `files.setEditorState` → `persistentViewState` | Yes, saved in the workspace |
+  | Database, collection and index lists | Memory caches per connection | No, re-fetched |
+  | Explorer expanded nodes | Memory store per connection | No |
+
+  The expanded nodes outlive the sidebar view, which unmounts while a non-MongoDB tab is active, so switching tabs doesn't collapse the tree.
+- Connection when nothing is bound: if exactly one connection is enabled, files use it. Otherwise the picker says "Select connection…" and execution fails with a `VALIDATION` error naming the problem.
+- Settings live in module `com.queryeer.mongodb`, setting `com.queryeer.mongodb.connections`, under **Settings → Query Engine → MongoDB**.
+  - The editor uses the host's `CollectionSettingsListEditor` and `useCollectionSettingsPersistence` (from `context.components`), with plugin-rendered detail fields. The sidebar view's ⚙ action and its "Add connection…" button open this setting directly with `context.settings.open("com.queryeer.mongodb.connections")`.
+  - **Test connection** calls the backend action `mongodb.testConnection` with the unsaved connection. It returns `{ ok, version }` or `{ ok: false, message }`.
+- Registrations that return a `Disposable` are disposed in `deactivate`. Several host `register*` methods return nothing yet (API-GAPS.md F6).
 - This is the same pattern the builtin JDBC engine uses.
 
 ### Query Language
 
 - A query is one or more MongoDB `runCommand` documents in relaxed Extended JSON, e.g. `{ "find": "orders", "filter": { "status": "open" }, "limit": 50 }`.
 - Several top-level documents in one file run in order, and each produces its own result set. Executing a selection runs only the selected text.
+- The documents may be separated by whitespace or commas, or wrapped in one JSON array.
+- `//` and `/* */` comments are allowed between documents but not inside them.
+- Shell helpers such as `ObjectId("...")` and `ISODate("...")` are accepted.
+- Every command is validated before any of them runs, so a rejected command anywhere in the file means nothing executes.
 - Which database a command runs against:
   1. The optional `"$db"` key in the document; the plugin removes it before sending the command.
   2. Otherwise the file's selected database (`engineState.database`).
@@ -117,18 +159,21 @@ Agreed design for the first milestone. It targets the Queryeer plugin APIs in `@
 - How each reply becomes rows:
   - Cursor commands (`find`, `aggregate`, `list*`): one row per document, streamed with `getMore` until the cursor is exhausted or the query is cancelled. The host table applies its own display row limit, as it does for JDBC.
   - `distinct`: one row per value, in a single `value` column.
-  - All other commands: the reply document becomes a single row.
-- Columns are the top-level keys of the first batch, in first-seen order. Keys that first appear in later documents are collected in a trailing `$extra` JSON column, because Queryeer cannot add columns to a result set that has already started. Users can fix the column set with a projection.
+  - `listDatabases`: one row per database.
+  - All other commands: the reply document becomes a single row, without `ok`, `$clusterTime` and `operationTime`.
+- Columns are the top-level keys of the first non-empty batch, in first-seen order.
+- Keys that first appear in later documents are collected in a trailing `$extra` JSON column, because Queryeer cannot add columns to a result set that has already started. Users can fix the column set with a projection.
+- `$extra` is only added when the cursor has more batches. A result that fits in one batch has exactly its keys as columns.
 - BSON type mapping:
 
   | BSON | Column type | Cell |
   |---|---|---|
   | int32 | `int` | number |
   | int64 | `long` | number |
-  | double | `double` | number |
-  | Decimal128 | `decimal` | string |
+  | double | `double` | number (NaN/Infinity as text) |
+  | Decimal128 | `decimal` | `BigDecimal`, as Payloadbuilder sends decimals (NaN/Infinity as text) |
   | boolean | `boolean` | boolean |
-  | date | `datetime` | ISO-8601 string |
+  | date | `datetimeoffset` | UTC date-time. Stored as a UTC instant, so it is sent with an explicit offset |
   | string | `string` | string |
   | ObjectId | `string` | hex string |
   | embedded document | `object` | JSON (large value) |
@@ -136,6 +181,7 @@ Agreed design for the first milestone. It targets the Queryeer plugin APIs in `@
   | Binary, Timestamp, Regex, MinKey, MaxKey, ... | `string` | Extended JSON |
 
 - A key whose values have different types within the first batch gets the `any` column type.
+- A later value that contradicts its column's type is sent as text, so the grid never receives a cell that disagrees with its column.
 - Nested documents and arrays are sent as JSON large values through `LargeValueStore`, the same way Payloadbuilder sends them.
 
 ### Errors, Cancellation and Timeouts
@@ -145,27 +191,74 @@ Agreed design for the first milestone. It targets the Queryeer plugin APIs in `@
 - Cancellation is cooperative. `cancel(queryExecutionId)`:
   1. sets a cancelled flag, which is checked between batches;
   2. closes the open cursor (`killCursors`);
-  3. makes a best-effort `killOp` for the operation tagged `comment: "<queryExecutionId>"` (every command carries that tag), so a slow first batch also stops on the server;
+  3. makes a best-effort `killOp` for the operation tagged `comment: "<queryExecutionId>"`, so a slow first batch also stops on the server. Every command carries that tag, including `getMore`, unless the user set their own `comment`;
   4. then reports `failed("CANCELLED")` immediately.
-- The host's `options.timeoutMs` maps to the driver's client-side operation timeout (`timeoutMS`) and is reported as `TIMEOUT`.
+- The host's `options.timeoutMs` is enforced in two ways, and both report `TIMEOUT`:
+  - The initial command uses the driver's client-side operation timeout (`timeoutMS`).
+  - A watchdog fires at the deadline, reports `TIMEOUT` and stops the execution the same way cancel does. It is needed because the server rejects `maxTimeMS` on `getMore`, and a `getMore` without `batchSize` can fetch the rest of a cursor in one long call.
+- Minimum server version is MongoDB 4.4, because of `comment` on all commands, including `getMore`. The tests run against MongoDB 7.0.
 - The provider is thread-safe: each execution runs on its own host thread, and `invoke` and `cancel` may arrive concurrently.
 
 ### Testing
 
-- Backend: JUnit 5 with Testcontainers MongoDB. The tests use a `RecordingPublisher`, modelled on the one in the JDBC engine's tests, and cover:
-  - command parsing
-  - the allowlist
+- Backend: JUnit 5, plus Testcontainers (`mongo:7.0`) tests that are skipped when Docker is not available. The tests use a `RecordingPublisher`, modelled on the one in the JDBC engine's tests, and cover:
+  - command parsing and positions
+  - the allowlist, including `$out`/`$merge` anywhere
   - type mapping
   - `$extra` handling
   - multiple result sets
-  - errors, cancellation and timeouts
-- Frontend: Vitest with a mocked `PluginContext`.
-- Packaging: a Docker-free test that checks the ZIP layout and that `plugin.json` validates against `plugin-schema/plugin.json.schema.v1.json`.
+  - database resolution
+  - server errors
+  - a locked vault
+  - cancellation (both while streaming and with `killOp` of a slow server operation)
+  - timeouts (on the initial command and across batches)
+- Packaging (`shared/scripts/verify-package.mjs`, no Docker needed) checks:
+  - `plugin.json` is at the archive root and valid against the vendored schema
+  - the file name, entry names, `lib/` jars and the sha256
+- End to end (`npm run mongodb:smoke`): runs the packaged plugin in Queryeer's real backend runner over the stdio protocol, against a throwaway MongoDB container. It needs a local Queryeer Desktop checkout with the backend built.
+- Frontend: Vitest covers connection parsing, validation and serialisation, plus connection and database resolution for executions, along with a TypeScript typecheck against `@queryeer/api`. The React components have no DOM tests yet.
 - Manual: install, restart, disable, upgrade and uninstall against Queryeer Desktop.
+
+### Building
+
+From the repository root (requires Java 25, Node 20+, and Docker for the Testcontainers and smoke tests):
+
+| Command | Does |
+|---|---|
+| `npm install` | Installs the packaging tooling and the frontend workspace (`plugins/*/frontend`). Needs the Queryeer Desktop checkout at `../queryeer-desktop/development`, with `packages/api` built, for the `file:` dependency |
+| `npm run mongodb:test` | Runs the frontend typecheck and tests, then the backend tests |
+| `npm run mongodb:package` | Builds the backend and the frontend, then assembles and verifies `dist/com.queryeer.mongodb-<version>.zip`, its `.sha256`, and the unpacked folder `dist/com.queryeer.mongodb-<version>/` |
+| `npm run mongodb:dev` | Frontend watch mode. Rebuilds on save, copies the bundle into the installed plugin, and installs `dist/…` first if it isn't installed. Then use **Reload Window** in Queryeer. Set `QUERYEER_PLUGINS_DIR` to use another plugins directory |
+| `npm run mongodb:smoke` | Runs the end-to-end check in Queryeer's backend runner. Set `QUERYEER_DESKTOP_DIR` if the core checkout is not at `../queryeer-desktop/development` |
+
+The backend compiles against `backend-api` `0.19.0-SNAPSHOT` from the local Maven repository, which you get by building Queryeer Desktop's backend.
+
+The plugin version lives in three places (API-GAPS.md F11):
+- `plugins/mongodb/plugin.json`
+- the `<version>` in `plugins/mongodb/backend/pom.xml`
+- `manifest.version` in `frontend/src/plugin.tsx`
+
+The packaging script checks only the first two.
+
+To try the plugin in Queryeer:
+- either install `dist/com.queryeer.mongodb-<version>.zip` from **Tools → Plugins**,
+- or copy the folder `dist/com.queryeer.mongodb-<version>/` into Queryeer's managed plugins directory (`%APPDATA%\queryeer-desktop\plugins` on Windows).
+
+Then restart Queryeer.
+
+**Development loop.** Queryeer has no hot reload for external plugins: it loads them once at startup and doesn't watch files.
+
+| Change | How to pick it up |
+|---|---|
+| Frontend | Keep `npm run mongodb:dev` running and use **Reload Window** after saving. No app restart needed. |
+| Backend | Use the Testcontainers tests and `npm run mongodb:smoke`. They need no app. To try a backend change in Queryeer: re-run `npm run mongodb:package`, quit Queryeer (Windows locks the plugin jars), replace the installed folder, and start Queryeer again. |
+
+What core could add to shorten this is listed under "Developer experience" in [API-GAPS.md](../../API-GAPS.md) (D1–D4).
+
+If npm blocks esbuild's install script (`npm warn install-scripts`), the build still works because the platform binary comes from esbuild's optional dependency. `npm install-scripts approve esbuild` silences the warning.
 
 ### Deferred
 
-- A MongoDB explorer tree (databases → collections → indexes) as a plugin-owned view registered with `context.layout.registerView`, fed by `context.queryEngines.invoke`.
 - Shell-style query syntax.
 - Completion and hover for MongoDB commands.
 - Write commands.
@@ -174,15 +267,15 @@ Agreed design for the first milestone. It targets the Queryeer plugin APIs in `@
 
 ## Development Order
 
-1. Inspect the current Queryeer plugin examples and public APIs.
-2. Establish the repository build for the frontend and backend targets.
-3. Add a valid root `plugin.json` and load a no-op plugin locally.
-4. Register a minimal native MongoDB query engine.
-5. Add connection configuration and credential handling through host APIs.
-6. Implement one end-to-end query operation and standard result output.
-7. Add focused tests for connection validation, execution, errors, and cancellation.
-8. Produce and validate the installable ZIP.
-9. Exercise installation and replacement against Queryeer Desktop.
+1. ✅ Inspect the current Queryeer plugin examples and public APIs.
+2. ✅ Backend and frontend builds. The frontend uses a `file:` link to the local `@queryeer/api` until 0.19.0 is published.
+3. ✅ Add a valid root `plugin.json`. The plugin loads and activates in the real backend runner.
+4. ✅ Engine registered on both the backend and the frontend.
+5. ✅ Connection settings, vault-resolved passwords, settings editor with Test connection, and the MongoDB sidebar view with connection and database pickers.
+6. ✅ End-to-end execution and standard result output (backend protocol).
+7. ✅ Focused tests for connections, execution, errors, cancellation and timeouts.
+8. ✅ Produce and validate the installable ZIP, which now includes the frontend.
+9. Exercise the frontend, installation and replacement in Queryeer Desktop (manual; next).
 10. Add the release workflow and the plugin's first catalog entry (see [Repository and Releases](../../README.md#repository-and-releases)).
 
 ## Queryeer Host APIs
