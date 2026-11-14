@@ -101,6 +101,27 @@ Through the public `tableOutputContextMenu`.
 - [ ] Command and stage names, operators, and field names from the schema sample
 - [ ] Blocked on core: API-GAPS.md F5 (language features for plugin languages)
 
+## 8. Releasing (when ready for the first release)
+
+Core's two-step pattern (`create-release.yml` + `release.yml`), per plugin and without snapshots. Shared by every plugin in the repository.
+
+- [ ] **`create-plugin-release.yml`** (`workflow_dispatch`)
+  - Inputs: `plugin` (choice, `mongodb` for now) and `increment` (patch / minor / major)
+  - Version: latest `<plugin>/v*` tag plus the increment. With no tag yet, `plugin.json`'s version as is, so the first release is 0.1.0.
+  - Sets the version in the three places that must agree: `plugins/<plugin>/plugin.json`, the backend `pom.xml` (the packager refuses a JAR whose version differs from `plugin.json`) and the frontend `package.json`
+  - Commits `release(<plugin>): v<version>`, tags `<plugin>/v<version>` and pushes; needs `RELEASE_TOKEN` to push to the protected branch, as in core. The changelog already skips `release:` commits.
+  - No `-SNAPSHOT` / "prepare for next development iteration" commit: only the ZIP is published, not Maven artifacts, so the version stays at the last release in between, and the changelog lists newer commits under "Unreleased"
+  - Only from the default branch
+- [ ] **`release-plugin.yml`** (on push of a `*/v*` tag)
+  - Reads the plugin from the tag; builds and tests only that plugin (same steps as `mongodb.yml`)
+  - Fails when the tag's version differs from `plugin.json`, and refuses to publish a tag twice (like core)
+  - GitHub Release for the tag with `<id>-<version>.zip` and `.zip.sha256`, release notes from that version's changelog section (the generator needs an option to print one section), `make_latest: false` (GitHub keeps one "latest" per repository; clients read the catalog)
+  - `workflow_dispatch` with `dry_run` that builds and checks without publishing, like core
+- [ ] Before the first release
+  - `mongodb:verify` in the root `package.json` hard-codes `0.1.0` in the ZIP name: let `verify-package.mjs` read the version from `plugin.json`, ideally with generic `test` / `package` / `verify <plugin>` scripts instead of per-plugin ones
+  - Merge `feature/mongodb` to the default branch
+- [ ] Later: update `catalog/index.json` from the release workflow, once Queryeer reads a catalog (see the root README's Repository and Releases)
+
 ## Out of scope for now
 
 - Write support (insert, update, delete, edit in grid). The plugin is read-only by design.
