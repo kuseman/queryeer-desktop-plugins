@@ -2,7 +2,6 @@ import type { PluginContext } from "@queryeer/api/plugin/Plugin";
 import type { EditorHandle } from "@queryeer/api/editor/EditorCapability";
 import { DATABASE_STATE_KEY, ENGINE_ID, FILE_EXTENSION, MIME_TYPE } from "./constants.js";
 
-const EDITOR_WAIT_MS = 5000;
 const EXECUTE_COMMAND_ID = "core.queryengine.execute";
 
 export type OpenQueryOptions = {
@@ -96,55 +95,24 @@ function isMac(): boolean {
 }
 
 /**
- * Opens a new .mongo tab bound to a connection and database, writes `text` into it and optionally runs it.
- *
- * Only public APIs are used, so this waits for the new tab's editor to become active before writing the text
- * and runs the public "Execute Query" command afterwards. Builtin engines seed and run new tabs through host
- * internals instead (API-GAPS.md F16).
+ * Opens a new .mongo tab bound to a connection and database, with `text` as its content, and optionally runs it.
+ * The content and the run are aimed at the new file, so neither depends on when its editor becomes active.
  */
 export async function openQueryFile(context: PluginContext, options: OpenQueryOptions): Promise<void> {
-  const file = await context.fileMediator.createUntitledFile({ mimeType: MIME_TYPE, extension: FILE_EXTENSION, title: options.title });
+  const file = await context.fileMediator.createUntitledFile({
+    mimeType: MIME_TYPE,
+    extension: FILE_EXTENSION,
+    title: options.title,
+    initialContent: options.text
+  });
 
-  // Bind before anything runs so the execution-context provider sends this connection and database
+  // Bind before the run so the execution-context provider sends this connection and database
   await context.fileMediator.bindEngine(file.fileId, ENGINE_ID, options.connectionId);
   setFileState(context, file.fileId, options);
 
-  const editor = await waitForActiveEditor(context, file.fileId, EDITOR_WAIT_MS);
-  if (!editor?.content) {
-    context.notifications.notify({
-      title: "MongoDB",
-      message: `Opened "${options.title}" but could not write the query into it. Paste it manually:\n${options.text}`,
-      severity: "warning"
-    });
-    return;
-  }
-  editor.content.setContent(options.text);
-
   if (options.execute) {
-    // Let the host register the new tab as the active query file before executing
-    await nextFrame();
-    await context.commands.executeCommand(EXECUTE_COMMAND_ID);
+    context.queryEngines.execute({ fileId: file.fileId, text: options.text });
   }
-}
-
-function waitForActiveEditor(context: PluginContext, fileId: string, timeoutMs: number): Promise<EditorHandle | undefined> {
-  const current = context.editors.getActiveEditor();
-  if (current?.fileId === fileId) {
-    return Promise.resolve(current);
-  }
-  return new Promise((resolve) => {
-    const timer = setTimeout(() => {
-      subscription.dispose();
-      resolve(undefined);
-    }, timeoutMs);
-    const subscription = context.editors.onActiveEditorChanged((editor) => {
-      if (editor?.fileId === fileId) {
-        clearTimeout(timer);
-        subscription.dispose();
-        resolve(editor);
-      }
-    });
-  });
 }
 
 function nextFrame(): Promise<void> {

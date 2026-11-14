@@ -225,13 +225,13 @@ From the repository root (requires Java 25, Node 20+, and Docker for the Testcon
 
 | Command | Does |
 |---|---|
-| `npm install` | Installs the packaging tooling and the frontend workspace (`plugins/*/frontend`). Needs the Queryeer Desktop checkout at `../queryeer-desktop/development`, with `packages/api` built, for the `file:` dependency |
+| `npm install` | Installs the packaging tooling and the frontend workspace (`plugins/*/frontend`), including `@queryeer/api` from npm |
 | `npm run mongodb:test` | Runs the frontend typecheck and tests, then the backend tests |
 | `npm run mongodb:package` | Builds the backend and the frontend, then assembles and verifies `dist/com.queryeer.mongodb-<version>.zip`, its `.sha256`, and the unpacked folder `dist/com.queryeer.mongodb-<version>/` |
 | `npm run mongodb:dev` | Frontend watch mode. Rebuilds on save, copies the bundle into the installed plugin, and installs `dist/…` first if it isn't installed. Then use **Reload Window** in Queryeer. Set `QUERYEER_PLUGINS_DIR` to use another plugins directory |
 | `npm run mongodb:smoke` | Runs the end-to-end check in Queryeer's backend runner. Set `QUERYEER_DESKTOP_DIR` if the core checkout is not at `../queryeer-desktop/development` |
 
-The backend compiles against `backend-api` `0.19.0-SNAPSHOT` from the local Maven repository, which you get by building Queryeer Desktop's backend.
+The plugin API comes from public registries: `@queryeer/api` from npm and `backend-api` / `backend-contract` from Maven Central, both 0.19.0. No Queryeer Desktop checkout is needed to build or test; only `mongodb:smoke` uses one.
 
 The plugin version lives in three places (API-GAPS.md F11):
 - `plugins/mongodb/plugin.json`

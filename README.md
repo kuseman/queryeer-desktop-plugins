@@ -39,7 +39,7 @@ The vendored schema in `shared/schema/` must be refreshed whenever Queryeer chan
 - **Tags:** `<short-name>/v<semver>`, e.g. `mongodb/v0.1.0`.
 - **Release assets:** `<plugin-id>-<version>.zip` plus `<plugin-id>-<version>.zip.sha256`, e.g. `com.queryeer.mongodb-0.1.0.zip`. Each tag gets its own GitHub Release; prereleases use GitHub's prerelease flag.
 - **CI:** one workflow per plugin, filtered by path, so a change under `plugins/mongodb/**` builds and tests only MongoDB ([mongodb.yml](.github/workflows/mongodb.yml): typecheck, unit tests, Testcontainers tests, package and verify; the ZIP is uploaded as a build artifact). A tag push will build only the tagged plugin.
-  - Until the 0.19.0 plugin API is published, CI builds `backend-api`, `backend-contract` and `@queryeer/api` from [kuseman/queryeer-desktop](https://github.com/kuseman/queryeer-desktop) at `CORE_REF` (now `api_surface_fixes`; override per run with the `core_ref` input). Point it at `master` once that branch is merged, and remove the core steps once 0.19.0 is released.
+  - The plugin API comes from npm (`@queryeer/api`) and Maven Central (`backend-api`, `backend-contract`), so CI needs no Queryeer Desktop checkout.
 - **Catalog:** the release workflow publishes the assets and then updates `catalog/index.json`. The catalog is served from a stable URL (GitHub Pages or a raw URL on `master`).
 - **No "latest release" lookups:** GitHub tracks one latest release per repository, not per plugin, so clients never call `/releases/latest`. They read the catalog.
 
