@@ -9,7 +9,18 @@ import { badgeFor, describeEntry, groupCollections } from "./collectionGroups.js
 import { collectionsOf, fieldsOf, formatCount, refreshFields, subscribeExplorer, type FieldInfo } from "./MongoExplorer.js";
 import {
   LIMIT_CHOICES,
+  OPERATOR_LABELS,
+  VALUE_TYPES,
+  VALUE_TYPE_LABELS,
   addSortKey,
+  clauseFor,
+  filterSummary,
+  newCondition,
+  operatorsFor,
+  takesValue,
+  valueTypeFor,
+  withFilter,
+  withValueType,
   clearProjection,
   flipSortKey,
   initialState,
@@ -26,13 +37,15 @@ import {
   withLimit,
   withProjectionMode,
   type BarState,
+  type Condition,
   type StoredBar
 } from "./queryBarModel.js";
 import { writeToFile } from "./queryFiles.js";
 
-type Popover = "fields" | "sort";
+type Popover = "filter" | "fields" | "sort";
 
 const POPOVER_WIDTH = 320;
+const FILTER_WIDTH = 600;
 const COMBOBOX_WIDTH = 300;
 
 /**
@@ -107,6 +120,12 @@ export function MongoQueryBar({ context, fileId }: { context: PluginContext; fil
     <div className="qmongo-qb">
       <CollectionInput context={context} connectionId={connection.connectionId} database={database} value={state.collection}
         onCommit={(collection) => void apply(withCollection(state, collection))} />
+
+      <Chip label="Filter" value={filterSummary(state.filter)} open={open === "filter"} disabled={!hasCollection} width={FILTER_WIDTH}
+        onToggle={() => toggle("filter")} onClose={() => setOpen(undefined)}>
+        <FilterPopover context={context} connectionId={connection.connectionId} database={database} state={state}
+          onChange={(s, run) => void apply(s, run)} />
+      </Chip>
 
       <Chip label="Fields" value={projectionSummary(state.projection)} open={open === "fields"} disabled={!hasCollection}
         onToggle={() => toggle("fields")} onClose={() => setOpen(undefined)}>
@@ -359,11 +378,12 @@ function Popup({ anchorRef, open, onClose, width, label, children }: {
 }
 
 /** A summary chip that opens a builder popup. */
-function Chip({ label, value, open, disabled, onToggle, onClose, children }: {
+function Chip({ label, value, open, disabled, width = POPOVER_WIDTH, onToggle, onClose, children }: {
   label: string;
   value: string;
   open: boolean;
   disabled: boolean;
+  width?: number;
   onToggle: () => void;
   onClose: () => void;
   children: ReactNode;
@@ -371,10 +391,10 @@ function Chip({ label, value, open, disabled, onToggle, onClose, children }: {
   const anchorRef = useRef<HTMLSpanElement>(null);
   return (
     <span className="qmongo-qb-chipwrap" ref={anchorRef}>
-      <button type="button" className="qmongo-qb-chip" aria-expanded={open} disabled={disabled} onClick={onToggle}>
-        <span className="qmongo-qb-label">{label}</span> {value} <span aria-hidden="true">▾</span>
+      <button type="button" className="qmongo-qb-chip" aria-expanded={open} disabled={disabled} onClick={onToggle} title={`${label}: ${value}`}>
+        <span className="qmongo-qb-label">{label}</span> <span className="qmongo-qb-chip-value">{value}</span> <span aria-hidden="true">▾</span>
       </button>
-      <Popup anchorRef={anchorRef} open={open} onClose={onClose} width={POPOVER_WIDTH} label={label}>
+      <Popup anchorRef={anchorRef} open={open} onClose={onClose} width={width} label={label}>
         {children}
       </Popup>
     </span>
@@ -386,7 +406,8 @@ type BuilderProps = {
   connectionId: string;
   database: string;
   state: BarState;
-  onChange: (state: BarState) => void;
+  /** `run` also executes the query, e.g. on Enter in a filter value. */
+  onChange: (state: BarState, run?: boolean) => void;
 };
 
 /** Sampled fields of the bar's collection, with a small loading/error line and a ↻ to sample again. */
@@ -474,4 +495,176 @@ function SortPopover(props: BuilderProps): JSX.Element {
       )}
     </div>
   );
+}
+
+const OTHER_FIELD = "\u0000other";
+
+/**
+ * Filter builder: rows of field · operator · value type · value, matched all (AND) or any (OR). The value type starts
+ * from the field's sampled types and can be changed, e.g. for a field stored as both numbers and text.
+ */
+function FilterPopover(props: BuilderProps): JSX.Element {
+  const { state, onChange } = props;
+  const { fields, status } = useFields(props);
+  const { combine, conditions } = state.filter;
+  const typesOf = new Map(fields.map((field) => [field.name, field.types]));
+
+  const update = (next: Condition[], run = false): void => onChange(withFilter(state, { combine, conditions: next }), run);
+  const replace = (index: number, condition: Condition, run = false): void =>
+    update(conditions.map((c, i) => (i === index ? condition : c)), run);
+  const firstUnused = fields.find((field) => !conditions.some((c) => c.field === field.name));
+
+  return (
+    <div className="qmongo-qb-builder">
+      <div className="qmongo-qb-builder-head">
+        <span className="qmongo-qb-label">Match</span>
+        <label className="qmongo-check">
+          <input type="radio" name="qmongo-qb-filter-combine" checked={combine === "and"}
+            onChange={() => onChange(withFilter(state, { combine: "and", conditions }))} />
+          all conditions
+        </label>
+        <label className="qmongo-check">
+          <input type="radio" name="qmongo-qb-filter-combine" checked={combine === "or"}
+            onChange={() => onChange(withFilter(state, { combine: "or", conditions }))} />
+          any condition
+        </label>
+        <button type="button" className="qmongo-button" disabled={conditions.length === 0}
+          onClick={() => onChange(withFilter(state, { combine, conditions: [] }))}>Clear</button>
+      </div>
+      {conditions.length === 0 && <div className="qmongo-muted">No conditions: every document matches.</div>}
+      {conditions.map((condition, index) => (
+        <ConditionRow key={index} index={index} condition={condition} fieldNames={fields.map((field) => field.name)} typesOf={typesOf}
+          onChange={(next, run) => replace(index, next, run)}
+          onRemove={() => update(conditions.filter((_, i) => i !== index))} />
+      ))}
+      {status}
+      <div>
+        <button type="button" className="qmongo-button"
+          onClick={() => update([...conditions, newCondition(firstUnused?.name ?? "", firstUnused?.types)])}>
+          + Add condition
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ConditionRow({ index, condition, fieldNames, typesOf, onChange, onRemove }: {
+  index: number;
+  condition: Condition;
+  fieldNames: string[];
+  typesOf: Map<string, string[]>;
+  onChange: (condition: Condition, run?: boolean) => void;
+  onRemove: () => void;
+}): JSX.Element {
+  // Value text is applied on blur or Enter, not per keystroke, so typing does not flood the editor's undo history
+  const [draft, setDraft] = useState(condition.value);
+  useEffect(() => setDraft(condition.value), [condition.value]);
+  // A path that is not in the sample (e.g. address.city) is typed; "Other field…" switches to typing
+  const [typing, setTyping] = useState(false);
+  const [fieldDraft, setFieldDraft] = useState(condition.field);
+  useEffect(() => {
+    setFieldDraft(condition.field);
+    setTyping(false);
+  }, [condition.field]);
+  const customField = typing || (condition.field !== "" && !fieldNames.includes(condition.field));
+
+  const label = `Condition ${index + 1}`;
+  const result = clauseFor({ ...condition, value: draft });
+  const error = "error" in result && condition.field !== "" ? result.error : undefined;
+  const commitValue = (run: boolean): void => {
+    if (draft !== condition.value || run) {
+      onChange({ ...condition, value: draft }, run);
+    }
+  };
+  const chooseField = (field: string): void => {
+    const types = typesOf.get(field);
+    // A sampled field retypes the row; a typed path keeps the type chosen so far
+    onChange(types ? withValueType({ ...condition, field }, valueTypeFor(types)) : { ...condition, field });
+  };
+  const sampledTypes = typesOf.get(condition.field);
+
+  return (
+    <div className="qmongo-qb-condition" role="group" aria-label={label}>
+      {customField ? (
+        <input className="qmongo-input qmongo-qb-cond-field" aria-label={`${label} field`} placeholder="field.path" value={fieldDraft} spellCheck={false}
+          autoFocus={condition.field === ""}
+          onChange={(e) => setFieldDraft(e.target.value)}
+          onBlur={() => fieldDraft.trim() !== condition.field && chooseField(fieldDraft.trim())}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              chooseField(fieldDraft.trim());
+            }
+          }} />
+      ) : (
+        <select className="qmongo-input qmongo-qb-cond-field" aria-label={`${label} field`} value={condition.field}
+          title={sampledTypes ? `${condition.field}: ${sampledTypes.join(" | ")}` : undefined}
+          onChange={(e) => {
+            if (e.target.value === OTHER_FIELD) {
+              setTyping(true);
+              setFieldDraft("");
+            } else {
+              chooseField(e.target.value);
+            }
+          }}>
+          {condition.field === "" && <option value="">Field…</option>}
+          {fieldNames.map((name) => <option key={name} value={name}>{name}</option>)}
+          <option value={OTHER_FIELD}>Other field…</option>
+        </select>
+      )}
+      <select className="qmongo-input qmongo-qb-cond-op" aria-label={`${label} operator`} value={condition.op}
+        onChange={(e) => onChange({ ...condition, op: e.target.value as Condition["op"], value: draft })}>
+        {operatorsFor(condition.type).map((op) => <option key={op} value={op}>{OPERATOR_LABELS[op]}</option>)}
+      </select>
+      {takesValue(condition.op) && (
+        <>
+          <select className="qmongo-input qmongo-qb-cond-type" aria-label={`${label} value type`} value={condition.type}
+            title="How the value is read"
+            onChange={(e) => onChange(withValueType({ ...condition, value: draft }, e.target.value as Condition["type"]))}>
+            {VALUE_TYPES.map((type) => <option key={type} value={type}>{VALUE_TYPE_LABELS[type]}</option>)}
+          </select>
+          {condition.type === "boolean" ? (
+            <select className="qmongo-input qmongo-qb-cond-value" aria-label={`${label} value`} value={condition.value}
+              onChange={(e) => onChange({ ...condition, value: e.target.value })}>
+              <option value="true">true</option>
+              <option value="false">false</option>
+            </select>
+          ) : condition.type === "null" ? (
+            <span className="qmongo-muted qmongo-qb-cond-value">null</span>
+          ) : (
+            <input className={`qmongo-input qmongo-qb-cond-value${error ? " is-invalid" : ""}`} aria-label={`${label} value`}
+              aria-invalid={error ? true : undefined} value={draft} spellCheck={false}
+              placeholder={placeholderFor(condition)}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commitValue(false)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitValue(true);
+                }
+              }} />
+          )}
+        </>
+      )}
+      <button type="button" className="qmongo-button" aria-label={`Remove ${label.toLowerCase()}`} title="Remove" onClick={onRemove}>✕</button>
+      {error && <div className="qmongo-error qmongo-qb-cond-error">{error}</div>}
+    </div>
+  );
+}
+
+function placeholderFor(condition: Condition): string {
+  if (condition.op === "in" || condition.op === "nin") {
+    return condition.type === "string" ? 'a, b, "c, d"' : "1, 2, 3";
+  }
+  switch (condition.type) {
+    case "date":
+      return "2026-11-14";
+    case "objectId":
+      return "24 hex characters";
+    case "number":
+    case "decimal":
+      return "0";
+    default:
+      return condition.op === "regex" ? "^abc" : "value";
+  }
 }

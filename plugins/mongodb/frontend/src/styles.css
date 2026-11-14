@@ -62,6 +62,11 @@
 .qmongo-qb-option.is-active { background: var(--state-select-bg, var(--surface-overlay-weak)); }
 .qmongo-qb-option.is-current .qmongo-qb-item-name { font-weight: 600; }
 .qmongo-qb-option-status { padding: 4px 6px; }
+.qmongo-qb-chip-value { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qmongo-qb-condition { display: grid; grid-template-columns: minmax(0, 1.3fr) auto auto minmax(0, 1.5fr) auto; align-items: center; gap: 4px; }
+.qmongo-qb-condition .qmongo-input { min-width: 0; }
+.qmongo-qb-cond-value.is-invalid { border-color: var(--status-error, #d14); }
+.qmongo-qb-cond-error { grid-column: 1 / -1; }
 .qmongo-qb-pager { display: inline-flex; align-items: center; gap: 4px; }
 .qmongo-qb-range { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
 

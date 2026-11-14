@@ -48,8 +48,13 @@ Redesigned 2026-11-13. Plain Filter/Projection/Sort text fields duplicated the e
 - [x] **Sort** builder: add fields in order, flip ↑/↓, remove
 - [x] Limit (20/50/100/500/1000/none), ◀ / ▶ paging with a range label, Run
 - [x] Popovers are portalled to `document.body`, because the editor's text pane clips overflow
-- [ ] **Filter** builder: rows of field · operator (by type) · typed value, AND/OR (next)
-- [ ] Value suggestions for low-cardinality fields (capped `distinct`)
+- [x] **Filter** builder: rows of field · operator · value type · value, matching all (AND) or any (OR)
+  - The value type starts from the field's sampled types and can be changed (text, number, decimal, date, ObjectId, true/false, null). Values are written as Extended JSON (`$date`, `$oid`, `$numberDecimal`, `$numberLong` beyond 2^53).
+  - Operators per type: = ≠ > ≥ < ≤, is one of / is none of (comma-separated; quotes keep a comma), contains (ignores case), starts with, matches regex, exists, is missing
+  - AND stays one flat document, with ranges on one field merged (`{ total: { $gte: 10, $lt: 20 } }`), falling back to `$and`. Invalid rows stay in the bar, marked, and are left out of the query.
+  - "Other field…" takes a typed path such as `address.city`
+  - Value text applies on blur or Enter, not per keystroke, so the editor's undo history stays usable. Enter also runs.
+- [ ] Value suggestions for low-cardinality fields (capped `distinct`) (next)
 - [ ] Nested fields (`address.city`): sampling returns top-level fields only today
 - [ ] Later, maybe: read hand-written finds back into the bar (needs a value parser)
 - [x] Verified in Queryeer (2026-11-14): query bar and collection combobox
