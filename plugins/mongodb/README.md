@@ -9,14 +9,14 @@ The first-milestone design is agreed (see [Design](#design)).
 **Backend: implemented and tested.** This covers the engine, connections, query language, results, errors, cancellation, timeouts and packaging.
 - It is tested with unit tests, Testcontainers tests against `mongo:7.0`, and an end-to-end smoke test in Queryeer's real backend runner.
 
-**Frontend: implemented, not yet run in the Queryeer app.** It covers:
+**Frontend: implemented and in use in the Queryeer app.** It covers:
 - the `.mongo` file type
 - engine registration
 - the connections settings editor, with a **Test connection** button
 - a **MongoDB** sidebar view for MongoDB files, with connection and database pickers, plus a read-only "connection | database" label in the query editor status bar
 - the execution-context provider
 
-It builds against the local core checkout's `@queryeer/api` through a `file:` dependency, until `@queryeer/api` 0.19.0 is published. Then change `plugins/mongodb/frontend/package.json` to `"@queryeer/api": "^0.19.0"`.
+It builds against `@queryeer/api` 0.19.0 from npm. The explorer, query bar and later work are tracked in [TODO.md](TODO.md); the changelog is generated from commit subjects (see [Building](#building)).
 
 Missing host APIs found along the way are tracked in [API-GAPS.md](../../API-GAPS.md).
 
@@ -242,6 +242,8 @@ The plugin version lives in three places (API-GAPS.md F11):
 
 The packaging script checks only the first two.
 
+The changelog is generated from git history by [`shared/scripts/generate-changelog.mjs`](../../shared/scripts/generate-changelog.mjs), the same way Queryeer Desktop generates its own. It takes only commits that touch `plugins/mongodb`, one section per `mongodb/v<semver>` tag plus one for commits since the latest tag, grouped by conventional-commit type (`feat:`, `fix:`, others). The backend build runs it (`generate-resources`) and packages the result into the JAR, and the plugin registers it with `context.changelogs()`, so it covers frontend and backend changes and shows in Queryeer's About dialog. Commit subjects are the changelog, so write them for users.
+
 To try the plugin in Queryeer:
 - either install `dist/com.queryeer.mongodb-<version>.zip` from **Tools → Plugins**,
 - or copy the folder `dist/com.queryeer.mongodb-<version>/` into Queryeer's managed plugins directory (`%APPDATA%\queryeer-desktop\plugins` on Windows).
@@ -270,7 +272,7 @@ If npm blocks esbuild's install script (`npm warn install-scripts`), the build s
 ## Development Order
 
 1. ✅ Inspect the current Queryeer plugin examples and public APIs.
-2. ✅ Backend and frontend builds. The frontend uses a `file:` link to the local `@queryeer/api` until 0.19.0 is published.
+2. ✅ Backend and frontend builds, against the 0.19.0 plugin API from npm and Maven Central.
 3. ✅ Add a valid root `plugin.json`. The plugin loads and activates in the real backend runner.
 4. ✅ Engine registered on both the backend and the frontend.
 5. ✅ Connection settings, vault-resolved passwords, settings editor with Test connection, and the MongoDB sidebar view with connection and database pickers.

@@ -52,7 +52,7 @@ Redesigned 2026-11-13. Plain Filter/Projection/Sort text fields duplicated the e
 - [ ] Value suggestions for low-cardinality fields (capped `distinct`)
 - [ ] Nested fields (`address.city`): sampling returns top-level fields only today
 - [ ] Later, maybe: read hand-written finds back into the bar (needs a value parser)
-- [ ] Verify in Queryeer
+- [x] Verified in Queryeer (2026-11-14): query bar and collection combobox
 
 ## 3. Grid cell actions
 
@@ -69,6 +69,7 @@ Through the public `tableOutputContextMenu`.
   - optionally, the editor tab coloured per connection with `context.layout.registerTabHeaderStyle`, keyed on `file.engineBinding.connectionId` (JDBC only colours the status label)
 - [ ] Paste a `mongodb://` / `mongodb+srv://` URI in the connection editor to fill the fields (credentials go to the vault, not settings)
 - [ ] Query templates in a new `.mongo` file (find, aggregate, count)
+- [x] Changelog generated from this plugin's commits since each `mongodb/v*` tag (`shared/scripts/generate-changelog.mjs`), packaged into the backend JAR and registered with `context.changelogs()` so it shows in the About dialog
 
 ## 5. Shell syntax
 
