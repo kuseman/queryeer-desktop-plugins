@@ -96,6 +96,45 @@ export const TEMPLATES: ReadonlyArray<{ id: TemplateKind; label: string; title: 
   { id: "distinct", label: "distinct", title: "The distinct values of a field" }
 ];
 
+/** The same templates as mongosh statements. Each one runs exactly as its JSON twin (the backend's ShellParserTest checks these texts). */
+export const SHELL_TEMPLATES: ReadonlyArray<{ id: TemplateKind; label: string; title: string }> = [
+  { id: "find", label: "find", title: "find(filter, projection) with sort, skip and limit" },
+  { id: "aggregate", label: "aggregate", title: "A pipeline: $match, $group, $sort, $limit" },
+  { id: "count", label: "countDocuments", title: "Count the documents matching a filter" },
+  { id: "distinct", label: "distinct", title: "The distinct values of a field" }
+];
+
+const SHELL_NAME = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/;
+
+/** `db.orders`, or `db.getCollection("variantsku-pricehistory")` for names that are not dotted identifiers. */
+export function shellCollection(collection: string): string {
+  const name = collection || "collection";
+  return SHELL_NAME.test(name) ? `db.${name}` : `db.getCollection(${JSON.stringify(name)})`;
+}
+
+/** A template as a mongosh statement, with a trailing newline like {@link commandText}. */
+export function shellTemplateText(kind: TemplateKind, collection: string): string {
+  const target = shellCollection(collection);
+  switch (kind) {
+    case "find":
+      return `${target}.find({}, {}).sort({ _id: 1 }).skip(0).limit(${BROWSE_LIMIT})\n`;
+    case "aggregate":
+      return [
+        `${target}.aggregate([`,
+        "  { $match: {} },",
+        "  { $group: { _id: \"$field\", count: { $sum: 1 } } },",
+        "  { $sort: { count: -1 } },",
+        `  { $limit: ${BROWSE_LIMIT} }`,
+        "])",
+        ""
+      ].join("\n");
+    case "count":
+      return `${target}.countDocuments({})\n`;
+    case "distinct":
+      return `${target}.distinct("field", {})\n`;
+  }
+}
+
 /** A template command on `collection` ("collection" when none is known yet). */
 export function templateCommand(kind: TemplateKind, collection: string): Record<string, unknown> {
   const name = collection || "collection";

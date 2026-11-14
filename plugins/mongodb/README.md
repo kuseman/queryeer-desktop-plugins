@@ -140,17 +140,39 @@ Agreed design for the first milestone. It targets the Queryeer plugin APIs in `@
 
 ### Query Language
 
-- A query is one or more MongoDB `runCommand` documents in relaxed Extended JSON, e.g. `{ "find": "orders", "filter": { "status": "open" }, "limit": 50 }`.
-- Several top-level documents in one file run in order, and each produces its own result set. Executing a selection runs only the selected text.
-- The documents may be separated by whitespace or commas, or wrapped in one JSON array.
-- `//` and `/* */` comments are allowed between documents but not inside them.
-- Shell helpers such as `ObjectId("...")` and `ISODate("...")` are accepted.
-- Every command is validated before any of them runs, so a rejected command anywhere in the file means nothing executes.
+A `.mongo` file holds statements in two forms, which can be mixed freely. Each statement is recognised by how it starts, so there is no mode to switch:
+
+- **Command documents** (`{` or `[`): MongoDB `runCommand` documents in Extended JSON, relaxed or canonical, e.g. `{ "find": "orders", "filter": { "status": "open" }, "limit": 50 }`. This is what the server itself receives, so any allowed command can be written, not only those with a shell helper.
+- **Shell statements** (`db.`): the mongosh syntax, translated to the same command documents the drivers send:
+
+  | Shell | Command sent |
+  |---|---|
+  | `db.c.find(filter?, projection?, options?)` with `.sort()` `.skip()` `.limit()` `.projection()` `.batchSize()` `.hint()` `.collation()` `.comment()` `.maxTimeMS()` `.allowDiskUse()` | `find` |
+  | `db.c.findOne(filter?, projection?)` | `find` with `limit: 1` |
+  | `db.c.find(…).count()` / `.size()` | `count` (`size` applies skip and limit) |
+  | `db.c.aggregate([stages], options?)`, also stages as separate arguments; `.batchSize()` | `aggregate` |
+  | `db.c.countDocuments(filter?, options?)`, `db.c.count(…)`, `db.c.estimatedDocumentCount()` | `count` |
+  | `db.c.distinct(key, filter?, options?)` | `distinct` |
+  | `db.c.getIndexes()`, `db.c.stats()` | `listIndexes`, `collStats` |
+  | `….explain(verbosity?)` after a call, or `db.c.explain(verbosity?).find(…)` | `explain` |
+  | `db.getCollection("name")`, `db.reports.monthly` (dotted names) | the collection |
+  | `db.getSiblingDB("name")` | the database (like `$db`) |
+  | `db.runCommand({…})`, `db.adminCommand({…})` | the document (`admin` for `adminCommand`) |
+  | `db.stats()`, `db.getCollectionNames()`, `db.getCollectionInfos(filter?)` | `dbStats`, `listCollections` |
+
+  `.pretty()` and `.toArray()` are accepted and ignored. The translation is checked against real mongosh: `ShellParserMongoshTest` runs each statement in mongosh with the profiler on and compares the command the server received with ours. One intentional difference: mongosh sends `countDocuments` as an aggregation, which returns no row at all for no matches; the plugin sends `count`, which returns `{ n: 0 }`.
+
+  It is a fixed grammar, not JavaScript: variables, functions, `forEach`/`map` and cursor iteration are rejected with a message saying so. Writes (`insertOne`, `updateMany`, `deleteMany`, `drop`, …) are rejected by name.
+- **Values** in both forms are read by the MongoDB Java driver's JSON reader, which accepts what mongosh users type: unquoted keys, single quotes, trailing commas, `ObjectId("…")`, `ISODate("…")`, `new Date("…")`, `NumberLong(…)`, `NumberDecimal("…")`, `UUID("…")`, `/regex/flags` and the other shell helpers.
+- Statements run in order, each with its own result set. They may be separated by new lines, `;` or commas, and JSON documents may be wrapped in one array. Executing a selection runs only the selected text.
+- `//` and `/* */` comments are allowed anywhere outside strings, also inside documents and arguments.
+- Every statement is parsed and validated before any of them runs, so an error anywhere in the file means nothing executes. Errors give the line and column.
 - Which database a command runs against:
-  1. The optional `"$db"` key in the document; the plugin removes it before sending the command.
+  1. `"$db"` in a document (the plugin removes it before sending), or `db.getSiblingDB("…")` / `db.adminCommand(…)` in a shell statement.
   2. Otherwise the file's selected database (`engineState.database`).
   3. Otherwise the connection's default database.
-- The implementation is split into a parse stage (text → `{ database, command }`) and an execute stage (command → cursor → rows). A shell-style parser for `db.orders.find(...)`, the syntax most MongoDB tools use, can be added later as a second parser that produces the same commands. Text starting with `{` or `[` is JSON; text starting with `db.` is shell syntax.
+- The editor highlights both forms (the `mongodb` editor language in `mongoLanguage.ts`). Plugin languages have no validation in the editor yet (API-GAPS.md F5); errors come from running.
+- The implementation is split into a parse stage (text → `{ database, command }`, `CommandParser` and `ShellParser`) and an execute stage (command → cursor → rows), which never knows which form was written. The query bar, explorer actions and templates write command documents.
 - Allowed commands are read-only: `find`, `aggregate`, `count`, `distinct`, `listDatabases`, `listCollections`, `listIndexes`, `dbStats`, `collStats`, `explain`, `ping`, `buildInfo`. An `aggregate` containing `$out` or `$merge` is rejected.
 
 ### Results

@@ -44,7 +44,7 @@ import {
   type Condition,
   type StoredBar
 } from "./queryBarModel.js";
-import { commandText, templateCommand, TEMPLATES } from "./queries.js";
+import { commandText, SHELL_TEMPLATES, shellTemplateText, templateCommand, TEMPLATES } from "./queries.js";
 import { writeToFile } from "./queryFiles.js";
 
 type Popover = "filter" | "fields" | "sort" | "templates";
@@ -190,15 +190,23 @@ function TemplatesMenu({ collection, open, onToggle, onClose, onPick }: {
     <Chip label="Templates" value="" open={open} disabled={false} onToggle={onToggle} onClose={onClose}>
       <div className="qmongo-qb-builder" role="menu" aria-label="Templates">
         <div className="qmongo-muted">Replaces the editor text with a command to edit by hand{collection ? ` on ${collection}` : ""} (Ctrl+Z undoes).</div>
-        {TEMPLATES.map((template) => (
-          <button key={template.id} type="button" role="menuitem" className="qmongo-qb-option" title={template.title}
-            onClick={() => {
-              onClose();
-              onPick(commandText(templateCommand(template.id, collection)));
-            }}>
-            <span className="qmongo-qb-item-name">{template.label}</span>
-            <span className="qmongo-muted">{template.title}</span>
-          </button>
+        {[
+          { heading: "JSON command", format: "json", templates: TEMPLATES },
+          { heading: "Shell (mongosh)", format: "shell", templates: SHELL_TEMPLATES }
+        ].map(({ heading, format, templates }) => (
+          <div key={format} role="group" aria-label={heading} className="qmongo-qb-template-group">
+            <div className="qmongo-qb-label">{heading}</div>
+            {templates.map((template) => (
+              <button key={template.id} type="button" role="menuitem" className="qmongo-qb-option" title={template.title}
+                onClick={() => {
+                  onClose();
+                  onPick(format === "shell" ? shellTemplateText(template.id, collection) : commandText(templateCommand(template.id, collection)));
+                }}>
+                <span className="qmongo-qb-item-name">{template.label}</span>
+                <span className="qmongo-muted">{template.title}</span>
+              </button>
+            ))}
+          </div>
         ))}
       </div>
     </Chip>

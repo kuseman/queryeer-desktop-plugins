@@ -7,6 +7,8 @@ import {
   distinctCommand,
   distinctTitle,
   queryTitle,
+  shellCollection,
+  shellTemplateText,
   slowQueriesCommand,
   tabTitle,
   TEMPLATES,
@@ -23,6 +25,33 @@ describe("templateCommand", () => {
       expect(Object.values(templateCommand(id, ""))[0]).toBe("collection");
     }
     expect(templateCommand("aggregate", "orders")).toMatchObject({ cursor: {} });
+  });
+});
+
+describe("shellTemplateText", () => {
+  // The backend's ShellParserTest parses these exact texts and checks they give the JSON templates' commands
+  it("writes mongosh statements", () => {
+    expect(shellTemplateText("find", "orders")).toBe("db.orders.find({}, {}).sort({ _id: 1 }).skip(0).limit(50)\n");
+    expect(shellTemplateText("count", "orders")).toBe("db.orders.countDocuments({})\n");
+    expect(shellTemplateText("distinct", "orders")).toBe("db.orders.distinct(\"field\", {})\n");
+    expect(shellTemplateText("aggregate", "orders")).toBe([
+      "db.orders.aggregate([",
+      "  { $match: {} },",
+      "  { $group: { _id: \"$field\", count: { $sum: 1 } } },",
+      "  { $sort: { count: -1 } },",
+      "  { $limit: 50 }",
+      "])",
+      ""
+    ].join("\n"));
+  });
+
+  it("uses getCollection for names that are not dotted identifiers", () => {
+    expect(shellCollection("orders")).toBe("db.orders");
+    expect(shellCollection("reports.monthly")).toBe("db.reports.monthly");
+    expect(shellCollection("variantsku-pricehistory")).toBe("db.getCollection(\"variantsku-pricehistory\")");
+    expect(shellCollection("2024")).toBe("db.getCollection(\"2024\")");
+    expect(shellCollection("")).toBe("db.collection");
+    expect(shellTemplateText("count", "a b")).toBe("db.getCollection(\"a b\").countDocuments({})\n");
   });
 });
 

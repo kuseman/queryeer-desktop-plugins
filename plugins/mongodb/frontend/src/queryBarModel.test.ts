@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { collectionCommand, commandText } from "./queries.js";
 import {
+  guessCollection,
   addSortKey,
   clauseFor,
   filterFor,
@@ -286,5 +287,19 @@ describe("embedded fields and value suggestions", () => {
     expect(valueOptions(row("status", "in", "string"), "", values)).toEqual(["new", "paid", '"a, \\"b\\""']);
     expect(valueOptions(row("status", "in", "string"), "new, pa", values)).toEqual(["new, paid", 'new, "a, \\"b\\""']);
     expect(splitList('new, "a, \\"b\\""')).toEqual(["new", 'a, "b"']);
+  });
+});
+
+describe("guessCollection", () => {
+  it("finds the collection of the first command, in either form", () => {
+    expect(guessCollection('{ "find": "orders", "filter": {} }')).toBe("orders");
+    expect(guessCollection("db.orders.find({ a: 1 })")).toBe("orders");
+    expect(guessCollection("db.reports.monthly.aggregate([])")).toBe("reports.monthly");
+    expect(guessCollection("db . orders\n  . countDocuments()")).toBe("orders");
+    expect(guessCollection('db.getCollection("system.profile").find()')).toBe("system.profile");
+    expect(guessCollection('db.customers.find()\n{ "count": "orders" }')).toBe("customers");
+    expect(guessCollection('{ "count": "orders" }\ndb.customers.find()')).toBe("orders");
+    expect(guessCollection("db.runCommand({ ping: 1 })")).toBe("");
+    expect(guessCollection("db.getSiblingDB('x').orders.find()")).toBe("");
   });
 });

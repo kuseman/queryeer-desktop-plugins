@@ -8,21 +8,32 @@ import org.bson.BsonInvalidOperationException;
 import org.bson.BsonValue;
 import org.bson.json.JsonParseException;
 
+import com.queryeer.plugin.mongodb.SourceScanner.LineIndex;
+
 /**
- * Parses query text into MongoDB command documents (Extended JSON, relaxed or canonical; shell helpers such as {@code ObjectId("...")} are accepted by the BSON parser).
+ * Parses query text into MongoDB command documents. Each statement is recognised by how it starts:
+ *
+ * <ul>
+ * <li>{@code {}: a command document in Extended JSON, relaxed or canonical. Shell helpers such as {@code ObjectId("...")}, unquoted keys, single
+ * quotes and trailing commas are accepted.</li>
+ * <li>{@code db.}: a mongosh-style statement such as {@code db.orders.find({...}).sort({...})}, translated to the same command documents by
+ * {@link ShellParser}.</li>
+ * </ul>
  *
  * <p>
- * The text may contain several top-level documents. They may be separated by whitespace or commas, may be wrapped in one JSON array, and may be surrounded by {@code //} and
- * {@code /* *}{@code /} comments. Comments inside a document are not supported.
+ * Statements may be separated by whitespace, commas or semicolons, JSON documents may be wrapped in one array, and {@code //} and
+ * {@code /* *}{@code /} comments may appear anywhere outside strings.
  * </p>
  *
  * <p>
- * This is the "parse" stage of the parse/execute split. A future shell-syntax parser ({@code db.orders.find(...)}) produces the same {@link ParsedCommand}s.
+ * This is the "parse" stage of the parse/execute split: both forms give the same {@link ParsedCommand}s, so execution never knows which was written.
  * </p>
  */
 final class CommandParser
 {
     static final String DB_KEY = "$db";
+
+    private final ShellParser shell = new ShellParser();
 
     List<ParsedCommand> parse(String text)
     {
@@ -38,22 +49,15 @@ final class CommandParser
             char c = source.charAt(i);
             if (Character.isWhitespace(c)
                     || c == ','
+                    || c == ';'
                     || c == '['
                     || c == ']')
             {
                 i++;
             }
-            else if (c == '/'
-                    && i + 1 < length
-                    && source.charAt(i + 1) == '/')
+            else if (SourceScanner.isCommentStart(source, i))
             {
-                i = skipLineComment(source, i);
-            }
-            else if (c == '/'
-                    && i + 1 < length
-                    && source.charAt(i + 1) == '*')
-            {
-                i = skipBlockComment(source, i, lines);
+                i = SourceScanner.skipNonCode(source, i, lines);
             }
             else if (c == '{')
             {
@@ -61,15 +65,22 @@ final class CommandParser
                 commands.add(toCommand(source.substring(i, end + 1), lines.line(i), lines.column(i)));
                 i = end + 1;
             }
+            else if (ShellParser.startsStatement(source, i))
+            {
+                ShellParser.Statement statement = shell.parse(source, i, lines);
+                commands.add(statement.command());
+                i = statement.end();
+            }
             else
             {
-                throw new QueryValidationException("Expected '{' to start a command document but found '" + c + "'", lines.line(i), lines.column(i));
+                throw new QueryValidationException("Expected a command document ({ \"find\": \"orders\" }) or a shell statement (db.orders.find()) but found '" + c + "'",
+                        lines.line(i), lines.column(i));
             }
         }
 
         if (commands.isEmpty())
         {
-            throw new QueryValidationException("No command to execute. Write a command document such as { \"find\": \"orders\", \"filter\": {} }");
+            throw new QueryValidationException("No command to execute. Write a command document such as { \"find\": \"orders\", \"filter\": {} }, or a shell statement such as db.orders.find({})");
         }
         return commands;
     }
@@ -79,7 +90,7 @@ final class CommandParser
         BsonDocument document;
         try
         {
-            document = BsonDocument.parse(json);
+            document = BsonDocument.parse(SourceScanner.forBsonReader(json, new LineIndex(json)));
         }
         catch (JsonParseException | BsonInvalidOperationException e)
         {
@@ -121,13 +132,13 @@ final class CommandParser
         int length = source.length();
         while (i < length)
         {
-            char c = source.charAt(i);
-            if (c == '"'
-                    || c == '\'')
+            int next = SourceScanner.skipNonCode(source, i, lines);
+            if (next > i)
             {
-                i = skipString(source, i, lines);
+                i = next;
                 continue;
             }
+            char c = source.charAt(i);
             if (c == '{'
                     || c == '[')
             {
@@ -149,96 +160,5 @@ final class CommandParser
             i++;
         }
         throw new QueryValidationException("Command document is not closed. Check that every '{' and '[' has a matching '}' or ']'", lines.line(start), lines.column(start));
-    }
-
-    /** Returns the index after the closing quote of the string starting at {@code start}. */
-    private static int skipString(String source, int start, LineIndex lines)
-    {
-        char quote = source.charAt(start);
-        int i = start + 1;
-        int length = source.length();
-        while (i < length)
-        {
-            char c = source.charAt(i);
-            if (c == '\\')
-            {
-                i += 2;
-                continue;
-            }
-            if (c == quote)
-            {
-                return i + 1;
-            }
-            i++;
-        }
-        throw new QueryValidationException("String is not closed", lines.line(start), lines.column(start));
-    }
-
-    private static int skipLineComment(String source, int start)
-    {
-        int newline = source.indexOf('\n', start);
-        return newline < 0 ? source.length()
-                : newline + 1;
-    }
-
-    private static int skipBlockComment(String source, int start, LineIndex lines)
-    {
-        int end = source.indexOf("*/", start + 2);
-        if (end < 0)
-        {
-            throw new QueryValidationException("Comment is not closed", lines.line(start), lines.column(start));
-        }
-        return end + 2;
-    }
-
-    /** Maps character offsets to 1-based line and column numbers. */
-    private static final class LineIndex
-    {
-        private final int[] lineStarts;
-
-        LineIndex(String source)
-        {
-            List<Integer> starts = new ArrayList<>();
-            starts.add(0);
-            for (int i = 0; i < source.length(); i++)
-            {
-                if (source.charAt(i) == '\n')
-                {
-                    starts.add(i + 1);
-                }
-            }
-            lineStarts = starts.stream()
-                    .mapToInt(Integer::intValue)
-                    .toArray();
-        }
-
-        int line(int offset)
-        {
-            return lineIndex(offset) + 1;
-        }
-
-        int column(int offset)
-        {
-            return offset - lineStarts[lineIndex(offset)] + 1;
-        }
-
-        private int lineIndex(int offset)
-        {
-            int low = 0;
-            int high = lineStarts.length - 1;
-            while (low < high)
-            {
-                int mid = (low + high + 1) >>> 1;
-                if (lineStarts[mid] <= offset)
-                {
-                    low = mid;
-                }
-                else
-                {
-                    high = mid - 1;
-                }
-            }
-            return low;
-        }
     }
 }
