@@ -24,6 +24,7 @@ import { clearExplorerCache } from "./MongoExplorer.js";
 import { registerGridActions } from "./gridActions.js";
 import { MongoQueryBar } from "./MongoQueryBar.js";
 import { MONGO_LANGUAGE_ID, mongoLanguage } from "./mongoLanguage.js";
+import { mongoOutline } from "./mongoOutline.js";
 import styles from "./styles.css";
 
 const STYLE_ELEMENT_ID = "com-queryeer-mongodb-styles";
@@ -73,6 +74,8 @@ function registerFileType(context: PluginContext): void {
   // Highlighting for both forms a .mongo file can hold: JSON command documents and shell statements
   disposables.push(context.editorLanguages.registerLanguage(mongoLanguage));
   disposables.push(context.editorLanguages.registerMimeType(MIME_TYPE, MONGO_LANGUAGE_ID));
+  // One outline entry per statement, like core's JSON and SQL outlines (@outline-pattern needs core: API-GAPS.md F24)
+  context.outline.registerOutlineProvider({ mimeType: MIME_TYPE, provider: mongoOutline });
 }
 
 function registerSettings(context: PluginContext): void {

@@ -37,6 +37,7 @@ Priority:
 | F21 Plugins cannot read large cell values | P2 | Open |
 | F22 Warning on a successful query stays behind the grid | P2 | Open |
 | F23 Plugins cannot store a secret | P3 | Open |
+| F24 `@outline-pattern` only works for core's own text types | P2 | Open |
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
@@ -250,6 +251,13 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Missing:** a secret reaches the vault only by typing into the host's `PasswordFieldInput`. A plugin cannot create a secret from a value it already has: `PasswordFieldInputProps` takes a `valueRef` and reports a new ref, and `PluginContext` has no vault access.
 - **Use case:** MongoDB's "Fill from connection string" reads `mongodb://user:password@host/…`. It fills every field but the password and asks the user to type the password again, which they just pasted.
 - **Suggestion:** `security.storeSecret(value): Promise<SecretRefValue>` (prompting for unlock like `PasswordFieldInput` does), or an `initialValue` on `PasswordFieldInput` that it stores as if typed.
+
+### F24 (P2): `@outline-pattern` only works for core's own text types
+- **Missing:** the custom-pattern outline (`@outline-pattern: /…/` in the first 20 lines, `core.editor/texteditor/outline-providers/custom-pattern-provider.ts`) is registered as a supplementary provider only for a fixed list of core MIME types (`application/json`, `application/sql`, `text/plain`, … in `core.editor/texteditor/plugin.tsx`). A plugin's text type never gets it, even when registered with content category `"text"`, and the provider is not exported for plugins to register themselves.
+- **Second part:** `TextEditorOutlineCapability` (and `TextEditorCapabilities`) return no symbols unless `hasProvider(mimeType)`, which only counts main providers. A type with only supplementary providers shows an empty outline.
+- **Use case:** `.mongo` files: `// @outline-pattern: /\/\/##(.*)/` with `//## Section` comments, as users do in SQL files with `--`. The directive syntax already accepts `//`.
+- **Suggestion:** register the custom-pattern provider for every MIME type whose content category is `"text"` (including ones registered later by plugins), and let `hasProvider` (or the capability) count supplementary providers too. Alternatively export the provider through the API so plugins can register it for their types.
+- **Plugin side meanwhile:** MongoDB registers its own main outline (one entry per statement), as core does for JSON and SQL. That satisfies the `hasProvider` check, so only the first part is left.
 
 ## Backend (`backend-api` / protocol)
 
