@@ -99,6 +99,8 @@ Through the public `tableOutputContextMenu`.
 - [x] `guessCollection` reads shell statements too, so "Use the query bar" and the grid actions know the collection
 - [ ] Maybe: an option for the query bar to write shell syntax instead of JSON
 - [ ] Maybe: show the command a shell statement was sent as (info message), e.g. when learning or debugging
+- [x] Outline for `.mongo` files (`mongoOutline.ts`): one entry per statement in either form ("find orders", "count campaign-variantsku", "runCommand dbStats"), with ranges for jumping to it
+- [ ] `@outline-pattern` sections (`// @outline-pattern: /\/\/##(.*)/`): blocked on core, API-GAPS.md F24. Core registers its custom-pattern outline only for its own MIME types; once it covers text types registered by plugins, it combines with the statement outline without changes here.
 
 ## 6. Explain view
 
