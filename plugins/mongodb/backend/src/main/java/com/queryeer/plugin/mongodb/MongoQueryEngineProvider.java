@@ -16,6 +16,8 @@ import org.bson.BsonArray;
 import org.bson.BsonBoolean;
 import org.bson.BsonDocument;
 import org.bson.BsonValue;
+import org.bson.json.JsonMode;
+import org.bson.json.JsonWriterSettings;
 import org.bson.BsonInt32;
 import org.bson.BsonString;
 
@@ -45,6 +47,10 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     static final String ACTION_INDEXES = "mongodb.indexes";
     static final String ACTION_FIELDS = "mongodb.fields";
     static final String ACTION_VALUES = "mongodb.values";
+    static final String ACTION_DOCUMENTS = "mongodb.documents";
+    /** At most this many documents per "Copy document". */
+    static final int DOCUMENTS_LIMIT = 1_000;
+    static final long DOCUMENTS_MAX_TIME_MS = 10_000;
     /** A field with more distinct values than this gets no suggestions. */
     static final int VALUE_SUGGESTION_LIMIT = 50;
     static final long VALUE_SUGGESTION_MAX_TIME_MS = 2_000;
@@ -213,6 +219,7 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
             case ACTION_COLLECTIONS -> listCollections(client, requiredText(map, "database"));
             case ACTION_INDEXES -> listIndexes(client, requiredText(map, "database"), requiredText(map, "collection"));
             case ACTION_FIELDS -> sampleFields(client, requiredText(map, "database"), requiredText(map, "collection"));
+            case ACTION_DOCUMENTS -> documentsById(client, requiredText(map, "database"), requiredText(map, "collection"), requiredText(map, "ids"));
             case ACTION_VALUES -> distinctValues(client, requiredText(map, "database"), requiredText(map, "collection"), requiredText(map, "field"),
                     VALUE_SUGGESTION_EXACT_MAX_DOCUMENTS);
             case ACTION_PING ->
@@ -541,6 +548,59 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
         result.put("values", values);
         result.put("complete", complete);
         return result;
+    }
+
+    /**
+     * Whole documents by {@code _id}, for the grid's "Copy document": {@code ids} is an Extended JSON array of {@code _id} values. Returns relaxed
+     * Extended JSON text per document, indented, in the order of {@code ids}; ids that match nothing are left out.
+     */
+    static List<String> documentsById(MongoClient client, String database, String collection, String ids)
+    {
+        BsonArray idArray = BsonDocument.parse("{ \"ids\": " + ids + " }")
+                .getArray("ids");
+        if (idArray.size() > DOCUMENTS_LIMIT)
+        {
+            throw new IllegalArgumentException("At most " + DOCUMENTS_LIMIT + " documents can be copied at once");
+        }
+        Map<Object, BsonDocument> byId = new java.util.HashMap<>();
+        client.getDatabase(database)
+                .getCollection(collection, BsonDocument.class)
+                .find(new BsonDocument("_id", new BsonDocument("$in", idArray)))
+                .maxTime(DOCUMENTS_MAX_TIME_MS, TimeUnit.MILLISECONDS)
+                .forEach(document -> byId.put(idKey(document.get("_id")), document));
+        JsonWriterSettings indented = JsonWriterSettings.builder()
+                .outputMode(JsonMode.RELAXED)
+                .indent(true)
+                .build();
+        List<String> result = new ArrayList<>();
+        for (BsonValue id : idArray)
+        {
+            BsonDocument document = byId.remove(idKey(id));
+            if (document != null)
+            {
+                result.add(document.toJson(indented));
+            }
+        }
+        return result;
+    }
+
+    /** Numbers match across int, long, double and decimal, as they do in the {@code $in} query. */
+    private static Object idKey(BsonValue id)
+    {
+        if (id.isNumber()
+                || id.isDecimal128())
+        {
+            java.math.BigDecimal number = id.isDecimal128() ? id.asDecimal128()
+                    .getValue()
+                    .bigDecimalValue()
+                    : new java.math.BigDecimal(id.isDouble() ? Double.toString(id.asDouble()
+                            .getValue())
+                            : Long.toString(id.asNumber()
+                                    .longValue()));
+            return "number:" + number.stripTrailingZeros()
+                    .toPlainString();
+        }
+        return id;
     }
 
     /** {@code { type, text }} with {@code type} a {@code $type} name, or null for values the filter cannot type in. */

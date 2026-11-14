@@ -20,6 +20,7 @@ import {
 import { MongoIcon } from "./MongoIcon.js";
 import { clearDatabaseCache, MongoConnectionView, MongoStatusLabel } from "./MongoConnectionView.js";
 import { clearExplorerCache } from "./MongoExplorer.js";
+import { registerGridActions } from "./gridActions.js";
 import { MongoQueryBar } from "./MongoQueryBar.js";
 import styles from "./styles.css";
 
@@ -183,6 +184,9 @@ function registerEngine(context: PluginContext): void {
       render: ({ fileId, file }) => (file?.mimeType === MIME_TYPE ? <MongoQueryBar context={context} fileId={fileId} /> : null)
     })
   );
+
+  // Result grid: filter by a cell's value, copy values and documents as Extended JSON
+  disposables.push(registerGridActions(context));
 
   // Read-only "connection | database" in the query editor status bar, like JDBC's
   disposables.push(

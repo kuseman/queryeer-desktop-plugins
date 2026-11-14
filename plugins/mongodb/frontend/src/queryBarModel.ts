@@ -532,7 +532,8 @@ export function valueOptions(condition: Condition, draft: string, values: readon
   return texts.filter((text) => !chosen.has(text)).map((text) => prefix + listItem(text));
 }
 
-function listItem(text: string): string {
+/** One value for an "is one of" list, quoted when it holds a comma or a quote, or has spaces at either end. */
+export function listItem(text: string): string {
   return /[,"]/.test(text) || text !== text.trim() ? `"${text.replace(/[\\"]/g, (c) => `\\${c}`)}"` : text;
 }
 
@@ -540,4 +541,10 @@ function listItem(text: string): string {
 export function isSortable(types: readonly string[]): boolean {
   const real = types.filter((type) => type !== "null" && type !== "missing");
   return real.length === 0 || real.some((type) => type !== "object" && type !== "array");
+}
+
+/** Prefills the collection when taking over a command the bar did not write, e.g. an explorer Sample or Count. */
+export function guessCollection(text: string): string {
+  const match = /["']?(?:find|aggregate|count|distinct|listIndexes)["']?\s*:\s*["']([^"']+)["']/.exec(text);
+  return match ? match[1] : "";
 }

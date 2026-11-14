@@ -34,6 +34,8 @@ Priority:
 | F18 JDBC sidebar rebinds other engines' files to `jdbc` | P1 | ✅ Fixed in core (not yet committed): a MIME type claimed by an engine is owned by it. `bindEngine` and `updateFile` reject foreign bindings (the existing binding is kept), restore/registration drops misbound ones, and the JDBC view/selector only act on SQL files. |
 | F19 Editor group steals focus from portalled popups | P3 | ✅ Fixed in core (`7de8251`): the group only takes focus for targets inside its own DOM node. MongoDB's button options still work and can stay. |
 | F20 Grid context menu doesn't name its file | P2 | ✅ Fixed in core (`226cb33`): `TableOutputContextMenuContext` has `fileId` and `engineId`, and `registerProvider` returns a `Disposable`. `when` expressions see them as `tableSelection.fileId` and `tableSelection.engineId`. |
+| F21 Plugins cannot read large cell values | P2 | Open |
+| F22 Warning on a successful query stays behind the grid | P2 | Open |
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
@@ -231,6 +233,17 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Suggestion:** add `fileId?: string` (and, for convenience, the file's `engineId`) to `TableOutputContextMenuContext`. `registerProvider` should also return a `Disposable` (F6).
 - **Fixed** in `226cb33`. `getItems` receives `fileId` and `engineId`, and `registerProvider` returns a `Disposable`. Disposing a stale registration doesn't remove a provider that replaced it.
 - **`when` expressions:** provider, item and user table action `when` expressions see the same values as `tableSelection.fileId` and `tableSelection.engineId`, registered as when-expression variables, e.g. `when: "tableSelection.engineId == 'mongodb'"`.
+
+### F21 (P2): Plugins cannot read large cell values
+- **Missing:** a cell over the backend's inline limit (16 KB by default) reaches the grid as a `QueryLargeValueCell` with a `preview` and a `ref`. The host reads the full value with `queryengine.largeValue.read` (the value preview dialog, Ctrl+C), but `PluginContext` has no way to do the same, so a table context menu item only ever sees the preview.
+- **Use case:** MongoDB's "Copy value as Extended JSON" on a large embedded document. The item is left out for large cells today; "Copy document" works around it by fetching the document again by `_id`, which is not possible for an aggregation's output.
+- **Suggestion:** `queryEngines.readLargeValue(ref): Promise<{ content: string; logicalType: string; contentType?: string }>`, scoped to cells of results the plugin's engine produced.
+
+### F22 (P2): A warning on a successful query stays behind the grid
+- **Missing:** the query editor selects the Text output only when an execution fails (`setPanelSelectedPrimary(…, TEXT_OUTPUT_PRIMARY_ID)` on the failure paths in `core.queryengine/QueryEditorComponent.tsx`), and the Plan output when a plan artifact arrives. A query that completes with a `WARNING` (or `ERROR`) message keeps the grid in front, which then says "No rows returned.", so the explanation is one click away and easy to miss.
+- **Use case:** MongoDB warns when an empty result comes from a collection that does not exist (`{ find: "product" }` when the collection is `products`). The query succeeds, as it does in MongoDB, so the warning is the only hint. JDBC warnings on empty results (e.g. SQL Server messages) would show up the same way.
+- **Suggestion:** on `queryengine.completed`, select the Text output when the execution produced a `warning` or `error` message and returned no rows, unless the user picked an output during the run or a file output is active. Rows still win: a warning next to real results should not hide them.
+- **Not worked around** in the plugin: completing with `features` that leave out `rows` would hide the grid, and failing the query would turn a valid MongoDB read into an error.
 
 ## Backend (`backend-api` / protocol)
 
