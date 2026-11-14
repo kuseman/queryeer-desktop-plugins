@@ -7,14 +7,14 @@
 //       QUERYEER_DESKTOP_DIR (default: ../queryeer-desktop/development next to this repository)
 //   - The plugin packaged first: npm run mongodb:package
 //
-//   node shared/scripts/smoke-mongodb-backend.mjs
+//   node plugins/mongodb/scripts/smoke-backend.mjs
 import { spawn, spawnSync } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..", "..");
+const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..", "..", "..");
 const core = resolve(process.env.QUERYEER_DESKTOP_DIR ?? join(repoRoot, "..", "queryeer-desktop", "development"));
 const manifest = JSON.parse(readFileSync(join(repoRoot, "plugins", "mongodb", "plugin.json"), "utf8"));
 const pluginFolder = join(repoRoot, "dist", `${manifest.id}-${manifest.version}`);
@@ -58,11 +58,11 @@ try {
   const settingsDir = join(work, "settings");
   mkdirSync(settingsDir, { recursive: true });
   cpSync(pluginFolder, join(pluginsDir, manifest.id), { recursive: true });
-  writeFileSync(join(settingsDir, "com.queryeer.mongodb.json"), JSON.stringify({
-    moduleId: "com.queryeer.mongodb",
+  writeFileSync(join(settingsDir, "com.queryeer.mongodb.connections.json"), JSON.stringify({
+    moduleId: "com.queryeer.mongodb.connections",
     version: 1,
     updatedAt: new Date().toISOString(),
-    values: { "com.queryeer.mongodb.connections": [{ connectionId: "local", title: "Local", hosts: `localhost:${port}`, defaultDatabase: "shop" }] }
+    values: { "com.queryeer.mongodb.connections.list": [{ connectionId: "local", title: "Local", hosts: `localhost:${port}`, defaultDatabase: "shop" }] }
   }));
 
   const classpath = [join(runnerTarget, "classes"), readFileSync(join(runnerTarget, "queryeer-runner-classpath.txt"), "utf8").trim()].join(delimiter);

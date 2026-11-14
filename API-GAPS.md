@@ -251,7 +251,7 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 
 ### B4 (P3): Runner needs the core repo as working directory
 - **Behaviour:** `BackendRunnerApp` finds builtin plugins relative to the working directory (`./plugins/builtin`), so a standalone run (tests, tools) has to use the core repo as `cwd`.
-- **Workaround here:** `shared/scripts/smoke-mongodb-backend.mjs` does that.
+- **Workaround here:** `plugins/mongodb/scripts/smoke-backend.mjs` does that.
 - **Suggestion:** a `-Dqueryeer.builtins.dir` system property, or resolve relative to the runner jar.
 
 ## Developer experience
