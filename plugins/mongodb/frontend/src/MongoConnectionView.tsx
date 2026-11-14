@@ -80,7 +80,8 @@ export function MongoConnectionView({ context, file }: { context: PluginContext;
     if (current && connection && !databaseCache.has(connection.connectionId)) {
       void loadDatabases(context, current.fileId, connection.connectionId, false);
     }
-  }, [context, current?.fileId, connection?.connectionId]); // eslint-disable-line react-hooks/exhaustive-deps
+    // `databases` too: the cache is cleared when connection details change, and the list must load again then
+  }, [context, current?.fileId, connection?.connectionId, databases === undefined]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!current) {
     return <div className="qmongo-view qmongo-muted">Open a MongoDB query file.</div>;

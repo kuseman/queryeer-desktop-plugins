@@ -2,7 +2,7 @@ import type { Plugin, PluginContext } from "@queryeer/api/plugin/Plugin";
 import type { Disposable } from "@queryeer/api/editor/EditorApi";
 import type { CSSProperties } from "react";
 import { buildEngineState, readSelectedDatabase, resolveConnection } from "./binding.js";
-import { isValidConnection, parseConnections } from "./connections.js";
+import { connectionFingerprint, isValidConnection, parseConnections } from "./connections.js";
 import { ConnectionsSettingsEditor, type TestConnectionResult } from "./ConnectionsSettingsEditor.js";
 import {
   ACTION_TEST_CONNECTION,
@@ -120,11 +120,11 @@ function registerSettings(context: PluginContext): void {
     ]
   });
 
-  // Cached database lists may be stale once connection details change
-  let lastConnections = JSON.stringify(context.settings.getValue(CONNECTIONS_SETTING_ID) ?? null);
+  // Cached database lists may be stale once connection details change (not for a new title or color)
+  let lastConnections = connectionFingerprint(context.settings.getValue(CONNECTIONS_SETTING_ID));
   disposables.push(
     context.settings.subscribe(() => {
-      const next = JSON.stringify(context.settings.getValue(CONNECTIONS_SETTING_ID) ?? null);
+      const next = connectionFingerprint(context.settings.getValue(CONNECTIONS_SETTING_ID));
       if (next !== lastConnections) {
         lastConnections = next;
         clearDatabaseCache();
