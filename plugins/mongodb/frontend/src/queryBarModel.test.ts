@@ -2,6 +2,17 @@ import { describe, expect, it } from "vitest";
 import { collectionCommand, commandText } from "./queries.js";
 import {
   addSortKey,
+  clauseFor,
+  filterFor,
+  filterSummary,
+  newCondition,
+  operatorsFor,
+  parseValue,
+  valueTypeFor,
+  withFilter,
+  withValueType,
+  type Condition,
+  type Filter,
   clearProjection,
   commandFor,
   flipSortKey,
@@ -114,5 +125,104 @@ describe("readStored", () => {
     expect(readStored({ written: "x" })).toBeUndefined();
     expect(readStored({ state: { ...initialState("o"), skip: -1 }, written: "x" })).toBeUndefined();
     expect(readStored({ state: { ...initialState("o"), projection: { mode: "both", fields: [] } }, written: "x" })).toBeUndefined();
+  });
+});
+
+describe("filter", () => {
+  const row = (field: string, op: Condition["op"], type: Condition["type"], value = ""): Condition => ({ field, op, type, value });
+  const filter = (conditions: Condition[], combine: Filter["combine"] = "and"): Filter => ({ combine, conditions });
+
+  it("reads values by type as Extended JSON", () => {
+    expect(parseValue("number", " 42 ")).toEqual({ value: 42 });
+    expect(parseValue("number", "-1.5e3")).toEqual({ value: -1500 });
+    expect(parseValue("number", "9007199254740993")).toEqual({ value: { $numberLong: "9007199254740993" } });
+    expect(parseValue("decimal", "12.50")).toEqual({ value: { $numberDecimal: "12.50" } });
+    expect(parseValue("date", "2026-11-14")).toEqual({ value: { $date: "2026-11-14T00:00:00.000Z" } });
+    expect(parseValue("date", "2026-11-14 08:30")).toEqual({ value: { $date: "2026-11-14T08:30:00.000Z" } });
+    expect(parseValue("date", "2026-11-14T08:30:00+01:00")).toEqual({ value: { $date: "2026-11-14T07:30:00.000Z" } });
+    expect(parseValue("objectId", "650000000000000000000001")).toEqual({ value: { $oid: "650000000000000000000001" } });
+    expect(parseValue("boolean", "false")).toEqual({ value: false });
+    expect(parseValue("null", "anything")).toEqual({ value: null });
+    expect(parseValue("string", " keeps spaces ")).toEqual({ value: " keeps spaces " });
+    for (const [type, text] of [["number", "12a"], ["decimal", ""], ["date", "yesterday"], ["date", "14/11/2026"], ["objectId", "abc"]] as const) {
+      expect(parseValue(type, text)).toHaveProperty("error");
+    }
+  });
+
+  it("writes one clause per operator", () => {
+    expect(clauseFor(row("status", "eq", "string", "paid"))).toEqual({ clause: { status: "paid" } });
+    expect(clauseFor(row("total", "gte", "number", "100"))).toEqual({ clause: { total: { $gte: 100 } } });
+    expect(clauseFor(row("total", "ne", "decimal", "0"))).toEqual({ clause: { total: { $ne: { $numberDecimal: "0" } } } });
+    expect(clauseFor(row("status", "in", "string", 'new, paid, "a, b"'))).toEqual({ clause: { status: { $in: ["new", "paid", "a, b"] } } });
+    expect(clauseFor(row("qty", "nin", "number", "1, 2"))).toEqual({ clause: { qty: { $nin: [1, 2] } } });
+    expect(clauseFor(row("name", "contains", "string", "a.b"))).toEqual({ clause: { name: { $regex: "a\\.b", $options: "i" } } });
+    expect(clauseFor(row("name", "startsWith", "string", "Al"))).toEqual({ clause: { name: { $regex: "^Al", $options: "" } } });
+    expect(clauseFor(row("name", "regex", "string", "^a.*z$"))).toEqual({ clause: { name: { $regex: "^a.*z$", $options: "" } } });
+    expect(clauseFor(row("phone", "exists", "string"))).toEqual({ clause: { phone: { $exists: true } } });
+    expect(clauseFor(row("phone", "missing", "string"))).toEqual({ clause: { phone: { $exists: false } } });
+    expect(clauseFor(row("notes", "eq", "null"))).toEqual({ clause: { notes: null } });
+    expect(clauseFor(row("address.city", "eq", "string", "Oslo"))).toEqual({ clause: { "address.city": "Oslo" } });
+  });
+
+  it("reports incomplete or invalid rows", () => {
+    expect(clauseFor(row("", "eq", "string", "x"))).toEqual({ error: "Pick a field" });
+    expect(clauseFor(row("name", "contains", "string", ""))).toHaveProperty("error");
+    expect(clauseFor(row("name", "regex", "string", "(unclosed"))).toHaveProperty("error");
+    expect(clauseFor(row("qty", "in", "number", "1, two"))).toEqual({ error: "two: Not a number" });
+    expect(clauseFor(row("qty", "in", "number", " , "))).toHaveProperty("error");
+  });
+
+  it("keeps AND flat, merges ranges on one field, and falls back to $and when it cannot merge", () => {
+    expect(filterFor(filter([]))).toEqual({});
+    expect(filterFor(filter([row("status", "eq", "string", "paid"), row("total", "gt", "number", "10")])))
+      .toEqual({ status: "paid", total: { $gt: 10 } });
+    expect(filterFor(filter([row("total", "gte", "number", "10"), row("total", "lt", "number", "20")])))
+      .toEqual({ total: { $gte: 10, $lt: 20 } });
+    expect(filterFor(filter([row("total", "gt", "number", "10"), row("total", "gt", "number", "20")])))
+      .toEqual({ $and: [{ total: { $gt: 10 } }, { total: { $gt: 20 } }] });
+    expect(filterFor(filter([row("name", "contains", "string", "a"), row("name", "ne", "string", "b")])))
+      .toEqual({ $and: [{ name: { $regex: "a", $options: "i" } }, { name: { $ne: "b" } }] });
+    expect(filterFor(filter([row("status", "eq", "string", "new"), row("status", "eq", "string", "paid")]))).toHaveProperty("$and");
+  });
+
+  it("writes $or for any, and leaves invalid rows out", () => {
+    expect(filterFor(filter([row("status", "eq", "string", "new"), row("express", "eq", "boolean", "true")], "or")))
+      .toEqual({ $or: [{ status: "new" }, { express: true }] });
+    expect(filterFor(filter([row("status", "eq", "string", "new"), row("total", "gt", "number", "x")], "or"))).toEqual({ status: "new" });
+  });
+
+  it("types new rows from the sampled BSON types", () => {
+    expect(valueTypeFor(["int", "double"])).toBe("number");
+    expect(valueTypeFor(["null", "date"])).toBe("date");
+    expect(valueTypeFor(["decimal"])).toBe("decimal");
+    expect(valueTypeFor(["objectId"])).toBe("objectId");
+    expect(valueTypeFor(["bool"])).toBe("boolean");
+    expect(valueTypeFor(["object"])).toBe("string");
+    expect(valueTypeFor([])).toBe("string");
+    expect(newCondition("express", ["bool"])).toEqual({ field: "express", op: "eq", type: "boolean", value: "true" });
+    expect(withValueType(row("name", "contains", "string", "x"), "number")).toEqual(row("name", "eq", "number", "x"));
+    expect(withValueType(row("total", "gt", "number", "5"), "decimal").op).toBe("gt");
+    expect(operatorsFor("boolean")).not.toContain("gt");
+  });
+
+  it("puts the filter in the find, resets paging, and survives a round trip through editor state", () => {
+    const state = withFilter({ ...initialState("orders"), skip: 100 }, filter([row("status", "eq", "string", "paid")]));
+    expect(state.skip).toBe(0);
+    expect(commandFor(state).filter).toEqual({ status: "paid" });
+    expect(withCollection(state, "customers").filter.conditions).toEqual([]);
+    const stored = { state, written: textFor(state) };
+    expect(readStored(JSON.parse(JSON.stringify(stored)))).toEqual(stored);
+    const { filter: _filter, ...older } = initialState("orders");
+    expect(readStored({ state: older, written: "x" })?.state.filter).toEqual({ combine: "and", conditions: [] });
+    expect(readStored({ state: { ...initialState("o"), filter: { combine: "xor", conditions: [] } }, written: "x" })).toBeUndefined();
+  });
+
+  it("summarises the filter for its chip", () => {
+    expect(filterSummary(filter([]))).toBe("none");
+    expect(filterSummary(filter([row("status", "eq", "string", "paid")]))).toBe('status = "paid"');
+    expect(filterSummary(filter([row("total", "gt", "number", "5")]))).toBe("total > 5");
+    expect(filterSummary(filter([row("phone", "missing", "string")]))).toBe("phone is missing");
+    expect(filterSummary(filter([row("a", "eq", "number", "1"), row("b", "eq", "number", "2"), row("c", "eq", "number", "x")], "or")))
+      .toBe("2 conditions (any)");
   });
 });

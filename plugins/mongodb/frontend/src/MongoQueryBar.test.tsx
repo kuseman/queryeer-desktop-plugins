@@ -289,3 +289,91 @@ describe("MongoQueryBar", () => {
     expect(editor.text()).toBe(textFor(initialState("orders")));
   });
 });
+
+describe("MongoQueryBar filter", () => {
+  const conditionControl = <T extends HTMLElement>(row: number, part: "field" | "operator" | "value type" | "value"): T =>
+    document.body.querySelector<T>(`[aria-label="Condition ${row} ${part}"]`)!;
+
+  async function press(input: HTMLElement, key: string): Promise<void> {
+    await act(async () => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
+    });
+    await settle();
+  }
+
+  async function blur(input: HTMLInputElement): Promise<void> {
+    await act(async () => {
+      input.focus();
+      input.blur();
+    });
+    await settle();
+  }
+
+  it("builds conditions typed from the sample, writes them into the find, and runs on Enter", async () => {
+    editorState.set(QUERY_BAR_STATE_KEY, { state: initialState("orders"), written: textFor(initialState("orders")) });
+    const editor = fakeEditor(textFor(initialState("orders")));
+    await mount(editor.handle);
+
+    await click(chip("Filter"));
+    await until(() => byLabel("+ Add condition") !== undefined);
+    await click(byLabel("+ Add condition"));
+    // The first sampled field not used yet, typed from its sampled types
+    expect(conditionControl<HTMLSelectElement>(1, "field").value).toBe("_id");
+    expect(conditionControl<HTMLSelectElement>(1, "value type").value).toBe("objectId");
+
+    await choose(conditionControl<HTMLSelectElement>(1, "field"), "total");
+    expect(conditionControl<HTMLSelectElement>(1, "value type").value).toBe("number");
+    await choose(conditionControl<HTMLSelectElement>(1, "operator"), "gt");
+
+    const value = conditionControl<HTMLInputElement>(1, "value");
+    await typeInto(value, "abc");
+    await blur(value);
+    expect(document.body.textContent).toContain("Not a number");
+    // An invalid row is kept in the bar but left out of the query
+    expect(JSON.parse(editor.text()).filter).toEqual({});
+
+    await typeInto(conditionControl<HTMLInputElement>(1, "value"), "100");
+    expect(executeCommand).not.toHaveBeenCalled();
+    await press(conditionControl<HTMLInputElement>(1, "value"), "Enter");
+    expect(JSON.parse(editor.text()).filter).toEqual({ total: { $gt: 100 } });
+    await until(() => executeCommand.mock.calls.length > 0);
+    expect(executeCommand).toHaveBeenCalledTimes(1);
+    expect(chip("Filter").textContent).toContain("total > 100");
+
+    await click(byLabel("+ Add condition"));
+    expect(conditionControl<HTMLSelectElement>(2, "field").value).toBe("_id");
+    await choose(conditionControl<HTMLSelectElement>(2, "field"), "status");
+    await choose(conditionControl<HTMLSelectElement>(2, "operator"), "contains");
+    await typeInto(conditionControl<HTMLInputElement>(2, "value"), "pai");
+    await blur(conditionControl<HTMLInputElement>(2, "value"));
+    expect(JSON.parse(editor.text()).filter).toEqual({ total: { $gt: 100 }, status: { $regex: "pai", $options: "i" } });
+
+    const any = Array.from(document.body.querySelectorAll<HTMLInputElement>('input[name="qmongo-qb-filter-combine"]'))[1];
+    await click(any);
+    expect(JSON.parse(editor.text()).filter).toEqual({ $or: [{ total: { $gt: 100 } }, { status: { $regex: "pai", $options: "i" } }] });
+
+    await click(byLabel("Remove condition 1"));
+    expect(JSON.parse(editor.text()).filter).toEqual({ status: { $regex: "pai", $options: "i" } });
+  });
+
+  it("filters on a field path that is not in the sample", async () => {
+    editorState.set(QUERY_BAR_STATE_KEY, { state: initialState("orders"), written: textFor(initialState("orders")) });
+    const editor = fakeEditor(textFor(initialState("orders")));
+    await mount(editor.handle);
+
+    await click(chip("Filter"));
+    await until(() => byLabel("+ Add condition") !== undefined);
+    await click(byLabel("+ Add condition"));
+    await choose(conditionControl<HTMLSelectElement>(1, "field"), "\u0000other");
+    const field = conditionControl<HTMLInputElement>(1, "field");
+    expect(field.tagName).toBe("INPUT");
+    await typeInto(field, "shipping.method");
+    await press(field, "Enter");
+    // Not in the sample: keeps the type chosen so far (ObjectId from _id), so switch to text
+    await choose(conditionControl<HTMLSelectElement>(1, "value type"), "string");
+    await typeInto(conditionControl<HTMLInputElement>(1, "value"), "home");
+    await blur(conditionControl<HTMLInputElement>(1, "value"));
+    expect(JSON.parse(editor.text()).filter).toEqual({ "shipping.method": "home" });
+    expect(conditionControl<HTMLInputElement>(1, "field").value).toBe("shipping.method");
+  });
+});
