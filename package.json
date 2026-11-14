@@ -1,0 +1,20 @@
+{
+  "name": "queryeer-desktop-plugins",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "plugins/*/frontend"
+  ],
+  "scripts": {
+    "mongodb:test": "npm run mongodb:frontend:test && node shared/scripts/mvnw.mjs -pl plugins/mongodb/backend -am verify",
+    "mongodb:frontend:test": "npm run typecheck -w @queryeer-plugins/mongodb-frontend && npm run test -w @queryeer-plugins/mongodb-frontend",
+    "mongodb:build": "node shared/scripts/mvnw.mjs -pl plugins/mongodb/backend -am clean package -DskipTests && npm run build -w @queryeer-plugins/mongodb-frontend",
+    "mongodb:package": "npm run mongodb:build && node shared/scripts/package-plugin.mjs plugins/mongodb && npm run mongodb:verify",
+    "mongodb:dev": "node shared/scripts/dev-frontend.mjs plugins/mongodb",
+    "mongodb:smoke": "node plugins/mongodb/scripts/smoke-backend.mjs",
+    "mongodb:verify": "node shared/scripts/verify-package.mjs dist/com.queryeer.mongodb-0.1.0.zip --expect-jar queryeer-mongodb-plugin- --expect-jar mongodb-driver-sync- --expect-jar mongodb-driver-core- --expect-jar bson-"
+  },
+  "devDependencies": {
+    "ajv": "^8.17.1"
+  }
+}

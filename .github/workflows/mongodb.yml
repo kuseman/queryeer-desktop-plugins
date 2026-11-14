@@ -1,0 +1,67 @@
+name: MongoDB plugin
+
+# Builds and tests only when the MongoDB plugin or something it is built with changes
+on:
+  push:
+    branches:
+      - "**"
+    paths: &paths
+      - "plugins/mongodb/**"
+      - "shared/**"
+      - "pom.xml"
+      - "mvnw"
+      - "mvnw.cmd"
+      - ".mvn/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/mongodb.yml"
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mongodb:
+    name: MongoDB plugin
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Full history and tags: the changelog is generated from this plugin's commits since each release tag
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: zulu
+          cache: maven
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Frontend typecheck and unit tests, then backend unit and Testcontainers tests (Docker is available on the Ubuntu runner)
+      - name: Test
+        run: npm run mongodb:test
+
+      - name: Package and verify
+        run: npm run mongodb:package
+
+      - name: Upload plugin package
+        uses: actions/upload-artifact@v7
+        with:
+          name: com.queryeer.mongodb
+          path: |
+            dist/*.zip
+            dist/*.zip.sha256
+          if-no-files-found: error
