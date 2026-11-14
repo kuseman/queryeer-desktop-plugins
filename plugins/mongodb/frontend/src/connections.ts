@@ -99,6 +99,14 @@ export function isValidConnection(connection: Partial<MongoConnection>): boolean
   return Object.keys(validateConnection(connection)).length === 0;
 }
 
+/**
+ * What decides where a connection connects to and as whom: everything but its title and color. Cached server data (database lists,
+ * collections, field samples) only needs to be dropped when this changes.
+ */
+export function connectionFingerprint(raw: unknown): string {
+  return JSON.stringify(parseConnections(raw).map(({ title: _title, color: _color, ...rest }) => serializeConnection({ ...rest, title: undefined, color: undefined })));
+}
+
 export function connectionLabel(connection: Pick<MongoConnection, "connectionId" | "title" | "hosts">): string {
   return connection.title?.trim() || connection.hosts || connection.connectionId;
 }
