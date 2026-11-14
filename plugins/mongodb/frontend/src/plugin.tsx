@@ -23,6 +23,7 @@ import { clearDatabaseCache, MongoConnectionView, MongoStatusLabel } from "./Mon
 import { clearExplorerCache } from "./MongoExplorer.js";
 import { registerGridActions } from "./gridActions.js";
 import { MongoQueryBar } from "./MongoQueryBar.js";
+import { MONGO_LANGUAGE_ID, mongoLanguage } from "./mongoLanguage.js";
 import styles from "./styles.css";
 
 const STYLE_ELEMENT_ID = "com-queryeer-mongodb-styles";
@@ -69,7 +70,9 @@ function registerFileType(context: PluginContext): void {
   files.capabilities.registerPreferredExtension?.(MIME_TYPE, FILE_EXTENSION);
   files.capabilities.registerContentCategory(MIME_TYPE, "text");
   files.mimeIcons.registerMimeIcon({ moduleId: PLUGIN_ID, mimeType: MIME_TYPE, icon: MongoIcon });
-  disposables.push(context.editorLanguages.registerMimeType(MIME_TYPE, "json"));
+  // Highlighting for both forms a .mongo file can hold: JSON command documents and shell statements
+  disposables.push(context.editorLanguages.registerLanguage(mongoLanguage));
+  disposables.push(context.editorLanguages.registerMimeType(MIME_TYPE, MONGO_LANGUAGE_ID));
 }
 
 function registerSettings(context: PluginContext): void {

@@ -116,3 +116,4 @@
 .qmongo-color-swatch { display: inline-block; width: 20px; height: 20px; border-radius: 3px; border: 1px solid var(--border); }
 .qmongo-tab-accent { position: relative; }
 .qmongo-tab-accent::after { content: ""; position: absolute; top: 4px; left: 0; bottom: 4px; width: 5px; border-radius: 0 2px 2px 0; background: var(--qmongo-tab-accent-color); }
+.qmongo-qb-template-group { display: grid; gap: 2px; }

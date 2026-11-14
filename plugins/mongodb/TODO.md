@@ -85,11 +85,20 @@ Through the public `tableOutputContextMenu`.
 - [x] Warn when an empty result comes from a collection that does not exist (MongoDB returns nothing instead of an error), with a "Did you mean" for names up to 2 edits away. One `listCollections`, only after empty find / aggregate / count / distinct results.
 - [x] **Fill from connection string**: paste a `mongodb://` / `mongodb+srv://` string in the connection editor to fill hosts, SRV, username, authentication database (driver rules: `authSource`, else the path database, else `admin`), default database, TLS flags and the remaining options. The string is applied at once and not kept. A password in it is left out with a note to type it into Password: plugins cannot write to the vault (API-GAPS.md F23).
 - [x] **Templates** menu in the query bar (also while it is off): find, aggregate, count and distinct on the current collection, replacing the editor text (Ctrl+Z undoes). Not as new-file content: any text in a new file would turn the query bar off.
+  - Each as a JSON command and as a shell statement (`countDocuments` in shell form); collection names that are not dotted identifiers use `db.getCollection("…")`. `ShellParserTest.shellTemplatesMatchTheirJsonTwins` checks that both forms run the same command.
 - [x] Changelog generated from this plugin's commits since each `mongodb/v*` tag (`shared/scripts/generate-changelog.mjs`), packaged into the backend JAR and registered with `context.changelogs()` so it shows in the About dialog
 
 ## 5. Shell syntax
 
-- [ ] A second parser for `db.<collection>.find(...).sort(...).limit(...)`, `aggregate([...])`, `countDocuments`, `distinct`. It produces the same command documents as the JSON form, so the execute stage is unchanged. Text starting with `db.` is shell syntax.
+- [x] `ShellParser`: mongosh statements (`db.<collection>.find(...).sort(...).limit(...)`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `count`, `distinct`, `getIndexes`, `stats`, `explain`, `getCollection`, `getSiblingDB`, `runCommand`, `adminCommand`, ...) translated to the same command documents as the JSON form; see the README's Query Language. Mixed freely with JSON documents in one file: each statement is recognised by how it starts (`{` / `[` or `db.`).
+  - Values go through the Java driver's JSON reader (unquoted keys, single quotes, trailing commas, shell helpers); `new Date("...")` is rewritten to `ISODate`
+  - Comments now work anywhere outside strings, also inside documents (before, a `/* */` inside a document was silently read as a regular expression)
+  - Not JavaScript: variables, functions and cursor iteration are rejected with a message saying so; writes are rejected by name
+  - Tests: `ShellParserTest` (statement table, values, errors with positions), `ShellParserMongoshTest` (each statement compared with the command real mongosh sends, via the profiler, in Testcontainers), and end-to-end runs in `MongoQueryEngineProviderContainerTest`
+- [x] `mongodb` editor language (Monarch): highlights both forms (keys, `$operators`, method names, shell helpers, regular expressions, comments)
+- [x] `guessCollection` reads shell statements too, so "Use the query bar" and the grid actions know the collection
+- [ ] Maybe: an option for the query bar to write shell syntax instead of JSON
+- [ ] Maybe: show the command a shell statement was sent as (info message), e.g. when learning or debugging
 
 ## 6. Explain view
 

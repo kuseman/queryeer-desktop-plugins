@@ -120,7 +120,7 @@ class CommandParserTest
     @Test
     void rejectsTextOutsideDocuments()
     {
-        QueryValidationException e = assertThrows(QueryValidationException.class, () -> parser.parse("db.orders.find({})"));
+        QueryValidationException e = assertThrows(QueryValidationException.class, () -> parser.parse("orders.find({})"));
 
         assertEquals(1, e.line());
         assertEquals(1, e.column());

@@ -147,6 +147,57 @@ class MongoQueryEngineProviderContainerTest
     }
 
     @Test
+    void executesShellStatementsMixedWithJsonCommands()
+    {
+        RecordingPublisher publisher = execute("""
+                // Shell and JSON in one file: one result set per statement
+                db.orders.find({ status: 'open' }, { _id: 1, total: 1 }).sort({ total: -1 }).limit(2)
+                { "count": "orders", "query": { "status": "closed" } }
+                db.orders.aggregate([
+                  { $group: { _id: '$status', sum: { $sum: '$total' } } },
+                  { $sort: { _id: 1 } }
+                ]);
+                db.orders.countDocuments({ total: { $gte: 30 } })
+                db.orders.distinct('status')
+                db.getSiblingDB('other').things.findOne()
+                """, local());
+
+        assertEquals(List.of("completed"), publisher.terminalEvents, String.valueOf(publisher.errorMessage));
+        assertEquals(6, publisher.resultSets.size());
+        assertEquals(List.of(Arrays.asList(4, 40), Arrays.asList(3, 30)), publisher.resultSet(0)
+                .rows(), "open orders by total, highest first");
+        assertEquals(2, ((Number) publisher.resultSet(1)
+                .rows()
+                .get(0)
+                .get(0)).intValue(), "count of closed orders");
+        assertEquals(List.of(Arrays.asList("closed", 70), Arrays.asList("open", 80)), publisher.resultSet(2)
+                .rows());
+        assertEquals(3, ((Number) publisher.resultSet(3)
+                .rows()
+                .get(0)
+                .get(0)).intValue(), "countDocuments gives a number, as in mongosh");
+        assertEquals(List.of(List.of("closed"), List.of("open")), publisher.resultSet(4)
+                .rows());
+        assertEquals(List.of(Arrays.asList("t1", "other")), publisher.resultSet(5)
+                .rows(), "getSiblingDB reads another database");
+    }
+
+    @Test
+    void reportsShellStatementErrorsAsValidationWithPosition()
+    {
+        RecordingPublisher write = execute("db.orders.find()\n\n  db.orders.deleteMany({})", local());
+        assertEquals(List.of("failed:VALIDATION"), write.terminalEvents);
+        assertTrue(write.errorMessage.startsWith("db.orders.deleteMany() writes data and is not allowed"), write.errorMessage);
+        assertEquals(3, write.errorDetails.get("line"));
+        assertEquals(13, write.errorDetails.get("column"));
+        assertEquals(List.of(), write.resultSets, "nothing runs when any statement is invalid");
+
+        RecordingPublisher script = execute("db.orders.find().forEach(d => print(d))", local());
+        assertEquals(List.of("failed:VALIDATION"), script.terminalEvents);
+        assertTrue(script.errorMessage.contains("not run as JavaScript"), script.errorMessage);
+    }
+
+    @Test
     void warnsWhenAnEmptyResultComesFromAMissingCollection()
     {
         RecordingPublisher typo = execute("{ \"find\": \"order\", \"filter\": {} }", local());
