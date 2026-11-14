@@ -3,6 +3,7 @@ import type { PluginContext } from "@queryeer/api/plugin/Plugin";
 import {
   connectionLabel,
   newConnection,
+  parseConnectionString,
   parseConnections,
   serializeConnection,
   validateConnection,
@@ -26,6 +27,9 @@ export function ConnectionsSettingsEditor({ value, readonly, setValue, component
   const [rows, setRows] = useState<MongoConnection[]>(() => parseConnections(value));
   const [selectedId, setSelectedId] = useState<string | undefined>(() => rows[0]?.connectionId);
   const [testState, setTestState] = useState<Record<string, { running: boolean; result?: TestConnectionResult }>>({});
+  // A pasted connection string is applied at once and not kept: it may hold a password
+  const [uriDraft, setUriDraft] = useState("");
+  const [uriNotice, setUriNotice] = useState<{ connectionId: string; error: boolean; text: string } | undefined>(undefined);
   // The host hook also flushes a pending debounced save when the settings view unmounts
   const { persistNow, persistDebounced } = useCollectionSettingsPersistence<MongoConnection>({
     persist: (next) => setValue(next.map(serializeConnection))
@@ -86,11 +90,61 @@ export function ConnectionsSettingsEditor({ value, readonly, setValue, component
     }
     const errors = validateConnection(selected);
     const test = testState[selected.connectionId];
+    const fill = (uri: string): void => {
+      const parsed = parseConnectionString(uri);
+      if ("error" in parsed) {
+        setUriNotice({ connectionId: selected.connectionId, error: true, text: parsed.error });
+        return;
+      }
+      // Every field the string covers is replaced, so fields it leaves out are cleared rather than kept from before
+      update(selected.connectionId, { username: undefined, authDatabase: "admin", defaultDatabase: undefined, options: undefined, ...parsed.fields });
+      setUriDraft("");
+      setUriNotice({
+        connectionId: selected.connectionId,
+        error: false,
+        text: parsed.hadPassword
+          ? "Filled from the connection string. Type its password into Password below: passwords are kept in the vault, so it was not copied."
+          : "Filled from the connection string."
+      });
+    };
+    const notice = uriNotice?.connectionId === selected.connectionId ? uriNotice : undefined;
     return (
       <div className="qmongo-detail" role="group" aria-label="MongoDB connection details">
+        <Field id="qmongo-uri" label="Fill from connection string (optional)">
+          <input id="qmongo-uri" className="qmongo-input" value={uriDraft} readOnly={readonly} spellCheck={false} autoComplete="off"
+            placeholder="Paste mongodb://… or mongodb+srv://…"
+            onChange={(e) => setUriDraft(e.target.value)}
+            onPaste={(e) => {
+              const pasted = e.clipboardData.getData("text");
+              if (pasted.trim()) {
+                e.preventDefault();
+                fill(pasted);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && uriDraft.trim()) {
+                e.preventDefault();
+                fill(uriDraft);
+              }
+            }} />
+          {notice && <div className={notice.error ? "qmongo-error" : "qmongo-muted"} role="status">{notice.text}</div>}
+        </Field>
         <Field id="qmongo-title" label="Title (optional)">
           <input id="qmongo-title" className="qmongo-input" value={selected.title ?? ""} readOnly={readonly} placeholder="Production"
             onChange={(e) => update(selected.connectionId, { title: e.target.value })} />
+        </Field>
+        <Field id={`qmongo-color-${selected.connectionId}`} label="Color (optional)">
+          <div className="qmongo-color">
+            <label className="qmongo-color-swatch-wrapper" title="Set or change the color shown on this connection's tabs and status label">
+              <input id={`qmongo-color-${selected.connectionId}`} type="color" className="qmongo-color-input" value={selected.color ?? "#000000"}
+                disabled={readonly} onChange={(e) => update(selected.connectionId, { color: e.target.value })} />
+              <span className="qmongo-color-swatch" style={{ backgroundColor: selected.color ?? "transparent" }} />
+            </label>
+            {selected.color && (
+              <button type="button" className="qmongo-button" disabled={readonly} title="Clear color" aria-label="Clear color"
+                onClick={() => update(selected.connectionId, { color: undefined })}>×</button>
+            )}
+          </div>
         </Field>
         <Field id="qmongo-hosts" label={selected.srv ? "SRV host" : "Hosts"} error={errors.hosts}>
           <input id="qmongo-hosts" className="qmongo-input" value={selected.hosts} readOnly={readonly}

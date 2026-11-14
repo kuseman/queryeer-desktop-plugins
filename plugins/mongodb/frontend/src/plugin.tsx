@@ -1,6 +1,7 @@
 import type { Plugin, PluginContext } from "@queryeer/api/plugin/Plugin";
 import type { Disposable } from "@queryeer/api/editor/EditorApi";
-import { buildEngineState, readSelectedDatabase } from "./binding.js";
+import type { CSSProperties } from "react";
+import { buildEngineState, readSelectedDatabase, resolveConnection } from "./binding.js";
 import { isValidConnection, parseConnections } from "./connections.js";
 import { ConnectionsSettingsEditor, type TestConnectionResult } from "./ConnectionsSettingsEditor.js";
 import {
@@ -198,6 +199,19 @@ function registerEngine(context: PluginContext): void {
       render: ({ file }) => <MongoStatusLabel context={context} file={file} />
     })
   );
+
+  // The connection's color as an accent on its tabs, like JDBC's
+  context.layout.registerTabHeaderStyle({
+    id: `${PLUGIN_ID}.tabHeaderStyle.connectionColor`,
+    order: 60,
+    render: ({ file }) => {
+      if (file.engineBinding?.engineId !== ENGINE_ID) {
+        return null;
+      }
+      const color = resolveConnection(file, parseConnections(context.settings.getValue(CONNECTIONS_SETTING_ID)))?.color;
+      return color ? { className: "qmongo-tab-accent", style: { "--qmongo-tab-accent-color": color } as CSSProperties } : null;
+    }
+  });
 }
 
 async function testConnection(context: PluginContext, connection: Record<string, unknown>): Promise<TestConnectionResult> {

@@ -44,9 +44,10 @@ import {
   type Condition,
   type StoredBar
 } from "./queryBarModel.js";
+import { commandText, templateCommand, TEMPLATES } from "./queries.js";
 import { writeToFile } from "./queryFiles.js";
 
-type Popover = "filter" | "fields" | "sort";
+type Popover = "filter" | "fields" | "sort" | "templates";
 
 const POPOVER_WIDTH = 320;
 const FILTER_WIDTH = 600;
@@ -99,6 +100,12 @@ export function MongoQueryBar({ context, fileId }: { context: PluginContext; fil
     return <div className="qmongo-qb"><span className="qmongo-muted">No MongoDB connection. Pick one in the MongoDB view.</span></div>;
   }
 
+  const templates = (collection: string): JSX.Element => (
+    <TemplatesMenu collection={collection} open={open === "templates"} onToggle={() => setOpen(open === "templates" ? undefined : "templates")}
+      onClose={() => setOpen(undefined)}
+      onPick={(text) => void writeToFile(context, fileId, text, false).then((written) => setNotice(written ? undefined : "Click into this tab's editor, then try again."))} />
+  );
+
   if (!owned) {
     const takeOver = stored?.state ?? initialState(guessCollection(editorText ?? ""));
     return (
@@ -110,6 +117,7 @@ export function MongoQueryBar({ context, fileId }: { context: PluginContext; fil
           onClick={() => void apply(takeOver)}>
           {stored ? "Take over again" : "Use the query bar"}
         </button>
+        {templates(guessCollection(editorText ?? "") || takeOver.collection)}
         {notice && <span className="qmongo-error">{notice}</span>}
       </div>
     );
@@ -164,8 +172,36 @@ export function MongoQueryBar({ context, fileId }: { context: PluginContext; fil
         onClick={() => void apply(state, true)}>
         Run
       </button>
+      {templates(state.collection)}
       {notice && <span className="qmongo-error">{notice}</span>}
     </div>
+  );
+}
+
+/** The "Templates" menu: replaces the editor text with a command to edit by hand (Ctrl+Z undoes), which turns the bar off for the tab. */
+function TemplatesMenu({ collection, open, onToggle, onClose, onPick }: {
+  collection: string;
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  onPick: (text: string) => void;
+}): JSX.Element {
+  return (
+    <Chip label="Templates" value="" open={open} disabled={false} onToggle={onToggle} onClose={onClose}>
+      <div className="qmongo-qb-builder" role="menu" aria-label="Templates">
+        <div className="qmongo-muted">Replaces the editor text with a command to edit by hand{collection ? ` on ${collection}` : ""} (Ctrl+Z undoes).</div>
+        {TEMPLATES.map((template) => (
+          <button key={template.id} type="button" role="menuitem" className="qmongo-qb-option" title={template.title}
+            onClick={() => {
+              onClose();
+              onPick(commandText(templateCommand(template.id, collection)));
+            }}>
+            <span className="qmongo-qb-item-name">{template.label}</span>
+            <span className="qmongo-muted">{template.title}</span>
+          </button>
+        ))}
+      </div>
+    </Chip>
   );
 }
 
@@ -390,7 +426,7 @@ function Chip({ label, value, open, disabled, width = POPOVER_WIDTH, onToggle, o
   const anchorRef = useRef<HTMLSpanElement>(null);
   return (
     <span className="qmongo-qb-chipwrap" ref={anchorRef}>
-      <button type="button" className="qmongo-qb-chip" aria-expanded={open} disabled={disabled} onClick={onToggle} title={`${label}: ${value}`}>
+      <button type="button" className="qmongo-qb-chip" aria-expanded={open} disabled={disabled} onClick={onToggle} title={value ? `${label}: ${value}` : label}>
         <span className="qmongo-qb-label">{label}</span> <span className="qmongo-qb-chip-value">{value}</span> <span aria-hidden="true">▾</span>
       </button>
       <Popup anchorRef={anchorRef} open={open} onClose={onClose} width={width} label={label}>

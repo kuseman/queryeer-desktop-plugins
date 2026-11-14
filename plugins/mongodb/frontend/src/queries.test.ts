@@ -9,9 +9,22 @@ import {
   queryTitle,
   slowQueriesCommand,
   tabTitle,
+  TEMPLATES,
+  templateCommand,
   validatorCommand
 } from "./queries.js";
 import { formatCount, formatJsonForTooltip, formatPresence } from "./MongoExplorer.js";
+
+describe("templateCommand", () => {
+  it("names the collection first, as the server expects, with a placeholder when none is known", () => {
+    for (const { id } of TEMPLATES) {
+      expect(Object.keys(templateCommand(id, "orders"))[0]).toBe(id);
+      expect(Object.values(templateCommand(id, "orders"))[0]).toBe("orders");
+      expect(Object.values(templateCommand(id, ""))[0]).toBe("collection");
+    }
+    expect(templateCommand("aggregate", "orders")).toMatchObject({ cursor: {} });
+  });
+});
 
 describe("collectionCommand", () => {
   it("builds a read-only command for every explorer action", () => {

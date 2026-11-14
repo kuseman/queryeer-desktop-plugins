@@ -108,3 +108,11 @@
   font-size: 11px; cursor: pointer;
 }
 .qmongo-tree-menu-item:hover { border-color: var(--focus-border, var(--accent)); }
+
+/* Connection color: swatch in the connection editor, accent on the connection's tabs (as JDBC's) */
+.qmongo-color { display: inline-flex; align-items: center; gap: 6px; }
+.qmongo-color-swatch-wrapper { position: relative; display: inline-flex; cursor: pointer; }
+.qmongo-color-input { position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none; }
+.qmongo-color-swatch { display: inline-block; width: 20px; height: 20px; border-radius: 3px; border: 1px solid var(--border); }
+.qmongo-tab-accent { position: relative; }
+.qmongo-tab-accent::after { content: ""; position: absolute; top: 4px; left: 0; bottom: 4px; width: 5px; border-radius: 0 2px 2px 0; background: var(--qmongo-tab-accent-color); }

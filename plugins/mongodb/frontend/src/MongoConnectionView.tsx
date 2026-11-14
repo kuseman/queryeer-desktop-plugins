@@ -168,5 +168,5 @@ export function MongoStatusLabel({ context, file }: { context: PluginContext; fi
     return <span className="qmongo-muted">MongoDB: no connection</span>;
   }
   const database = selectedDatabase || connection.defaultDatabase;
-  return <span>{connectionLabel(connection)}{database ? ` | ${database}` : ""}</span>;
+  return <span style={connection.color ? { color: connection.color } : undefined}>{connectionLabel(connection)}{database ? ` | ${database}` : ""}</span>;
 }

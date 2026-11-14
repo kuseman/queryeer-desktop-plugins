@@ -81,13 +81,10 @@ Through the public `tableOutputContextMenu`.
 
 ## 4. Small polish
 
-- [ ] **Connection colour**, like JDBC connections:
-  - an optional `color` field in `connections.ts` (parse and serialize) and a colour input in `ConnectionsSettingsEditor.tsx`; the backend ignores unknown fields
-  - applied to the read-only "connection | database" status label (`MongoStatusLabel` in `MongoConnectionView.tsx`) with `style={{ color }}`, as JDBC's `JdbcConnectionStatus.tsx` does
-  - optionally, the editor tab coloured per connection with `context.layout.registerTabHeaderStyle`, keyed on `file.engineBinding.connectionId` (JDBC only colours the status label)
+- [x] **Connection colour**, like JDBC connections: an optional `#rrggbb` `color` per connection (swatch and clear in the connection editor; the backend ignores it), shown on the "connection | database" status label and as an accent bar on the connection's tabs (`layout.registerTabHeaderStyle`, own `qmongo-tab-accent` class matching JDBC's)
 - [x] Warn when an empty result comes from a collection that does not exist (MongoDB returns nothing instead of an error), with a "Did you mean" for names up to 2 edits away. One `listCollections`, only after empty find / aggregate / count / distinct results.
-- [ ] Paste a `mongodb://` / `mongodb+srv://` URI in the connection editor to fill the fields (credentials go to the vault, not settings)
-- [ ] Query templates in a new `.mongo` file (find, aggregate, count)
+- [x] **Fill from connection string**: paste a `mongodb://` / `mongodb+srv://` string in the connection editor to fill hosts, SRV, username, authentication database (driver rules: `authSource`, else the path database, else `admin`), default database, TLS flags and the remaining options. The string is applied at once and not kept. A password in it is left out with a note to type it into Password: plugins cannot write to the vault (API-GAPS.md F23).
+- [x] **Templates** menu in the query bar (also while it is off): find, aggregate, count and distinct on the current collection, replacing the editor text (Ctrl+Z undoes). Not as new-file content: any text in a new file would turn the query bar off.
 - [x] Changelog generated from this plugin's commits since each `mongodb/v*` tag (`shared/scripts/generate-changelog.mjs`), packaged into the backend JAR and registered with `context.changelogs()` so it shows in the About dialog
 
 ## 5. Shell syntax

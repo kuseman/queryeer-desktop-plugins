@@ -1,5 +1,61 @@
 import { describe, expect, it } from "vitest";
-import { connectionLabel, isValidConnection, parseConnections, serializeConnection, validateConnection } from "./connections.js";
+import {
+  connectionLabel,
+  isValidConnection,
+  newConnection,
+  parseConnectionString,
+  parseConnections,
+  serializeConnection,
+  validateConnection
+} from "./connections.js";
+
+describe("connection color", () => {
+  it("keeps a #rrggbb color through storage and drops anything else", () => {
+    const [stored] = parseConnections([{ connectionId: "c1", hosts: "h", color: "#FF8800" }]);
+    expect(stored.color).toBe("#ff8800");
+    expect(serializeConnection(stored).color).toBe("#ff8800");
+    expect(parseConnections([{ connectionId: "c1", hosts: "h", color: "red" }])[0].color).toBeUndefined();
+    expect(serializeConnection(newConnection())).not.toHaveProperty("color");
+  });
+});
+
+describe("parseConnectionString", () => {
+  it("reads hosts, user, database and options, and leaves the password out", () => {
+    expect(parseConnectionString("mongodb://app%40corp:s3cr%3At@db1:27017,db2:27018/shop?replicaSet=rs0&authSource=admin&readPreference=secondary"))
+      .toEqual({
+        fields: {
+          hosts: "db1:27017,db2:27018",
+          srv: false,
+          tls: false,
+          tlsAllowInvalidCertificates: false,
+          username: "app@corp",
+          authDatabase: "admin",
+          defaultDatabase: "shop",
+          options: "replicaSet=rs0&readPreference=secondary"
+        },
+        hadPassword: true
+      });
+  });
+
+  it("follows the driver's defaults for SRV, TLS and the authentication database", () => {
+    const srv = parseConnectionString("mongodb+srv://reader@cluster0.example.mongodb.net/reports");
+    expect(srv).toMatchObject({ fields: { srv: true, tls: true, authDatabase: "reports", defaultDatabase: "reports" }, hadPassword: false });
+    expect(parseConnectionString("mongodb+srv://cluster0.example.mongodb.net/?tls=false")).toMatchObject({ fields: { tls: false } });
+    expect(parseConnectionString("mongodb://u@h/?ssl=true&tlsInsecure=true")).toMatchObject({ fields: { tls: true, tlsAllowInvalidCertificates: true, authDatabase: "admin" } });
+    expect(parseConnectionString("mongodb://h:27017")).toEqual({
+      fields: { hosts: "h:27017", srv: false, tls: false, tlsAllowInvalidCertificates: false, username: undefined, authDatabase: undefined, defaultDatabase: undefined, options: undefined },
+      hadPassword: false
+    });
+  });
+
+  it("gives a connection that validates, and rejects anything else", () => {
+    const parsed = parseConnectionString("mongodb://localhost:27017/?appName=queryeer");
+    expect("fields" in parsed && isValidConnection({ ...newConnection(), ...parsed.fields })).toBe(true);
+    expect(parseConnectionString("postgres://h/db")).toHaveProperty("error");
+    expect(parseConnectionString("mongodb://")).toHaveProperty("error");
+    expect(parseConnectionString("mongodb://u%ZZ@h")).toHaveProperty("error");
+  });
+});
 
 describe("parseConnections", () => {
   it("parses stored connections with defaults and skips invalid or duplicate entries", () => {

@@ -20,6 +20,8 @@ export type MongoConnection = {
   /** Extra URI options, e.g. `replicaSet=rs0&readPreference=secondary`. */
   options?: string;
   enabled: boolean;
+  /** `#rrggbb`, shown on the connection's tabs and status label (frontend only; the backend ignores it). */
+  color?: string;
 };
 
 /** Parses the raw setting value. Entries without an ID or hosts are skipped; the first entry wins for duplicate IDs. */
@@ -51,7 +53,8 @@ export function parseConnections(raw: unknown): MongoConnection[] {
       tlsAllowInvalidCertificates: entry.tlsAllowInvalidCertificates === true,
       defaultDatabase: text(entry.defaultDatabase),
       options: text(entry.options),
-      enabled: entry.enabled !== false
+      enabled: entry.enabled !== false,
+      color: color(entry.color)
     });
   }
   return result;
@@ -110,7 +113,7 @@ export function serializeConnection(connection: MongoConnection): Record<string,
     tlsAllowInvalidCertificates: connection.tlsAllowInvalidCertificates,
     enabled: connection.enabled
   };
-  for (const key of ["title", "username", "authDatabase", "defaultDatabase", "options"] as const) {
+  for (const key of ["title", "username", "authDatabase", "defaultDatabase", "options", "color"] as const) {
     const value = connection[key]?.trim();
     if (value) {
       out[key] = value;
@@ -140,6 +143,70 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function color(value: unknown): string | undefined {
+  return typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value.trim()) ? value.trim().toLowerCase() : undefined;
+}
+
+/** What a pasted connection string fills in. The password is never part of it: it has to be typed into the vault-backed field. */
+export type ParsedConnectionString = {
+  fields: Pick<MongoConnection, "hosts" | "srv" | "tls" | "tlsAllowInvalidCertificates"> &
+    Partial<Pick<MongoConnection, "username" | "authDatabase" | "defaultDatabase" | "options">>;
+  /** The string held a password, which was left out. */
+  hadPassword: boolean;
+};
+
+/** Options mapped to their own fields instead of being kept as extra URI options. */
+const MAPPED_OPTIONS = ["authsource", "tls", "ssl", "tlsallowinvalidcertificates", "sslallowinvalidcertificates", "tlsinsecure"];
+
+/**
+ * Reads a `mongodb://` or `mongodb+srv://` connection string into connection fields. The authentication database follows the
+ * driver's rules: `authSource`, else the database in the path, else `admin`. SRV turns TLS on unless the string turns it off.
+ */
+export function parseConnectionString(input: string): ParsedConnectionString | { error: string } {
+  const match = /^(mongodb(?:\+srv)?):\/\/(?:([^@/?#]*)@)?([^/?#]+)(?:\/([^?#]*))?(?:\?([^#]*))?$/.exec(input.trim());
+  if (!match) {
+    return { error: "Not a MongoDB connection string (mongodb://… or mongodb+srv://…)" };
+  }
+  const [, scheme, userInfo, hosts, path, query] = match;
+  const srv = scheme === "mongodb+srv";
+  let username: string | undefined;
+  let hadPassword = false;
+  try {
+    if (userInfo !== undefined) {
+      const colon = userInfo.indexOf(":");
+      username = decodeURIComponent(colon < 0 ? userInfo : userInfo.slice(0, colon)) || undefined;
+      hadPassword = colon >= 0 && userInfo.length > colon + 1;
+    }
+    const database = path ? decodeURIComponent(path) || undefined : undefined;
+    const params: Array<[string, string]> = [];
+    new URLSearchParams(query ?? "").forEach((value, key) => params.push([key, value]));
+    const lower = new Map(params.map(([key, value]) => [key.toLowerCase(), value]));
+    const flag = (...keys: string[]): boolean | undefined => {
+      const value = keys.map((key) => lower.get(key)).find((v) => v !== undefined);
+      return value === undefined ? undefined : value.toLowerCase() === "true";
+    };
+    const extra = params.filter(([key]) => !MAPPED_OPTIONS.includes(key.toLowerCase()))
+      .map(([key, value]) => `${key}=${encodeURIComponent(value)}`)
+      .join("&");
+    const tls = flag("tls", "ssl") ?? srv;
+    return {
+      fields: {
+        hosts: decodeURIComponent(hosts),
+        srv,
+        tls,
+        tlsAllowInvalidCertificates: tls && (flag("tlsallowinvalidcertificates", "sslallowinvalidcertificates", "tlsinsecure") ?? false),
+        username,
+        authDatabase: lower.get("authsource") || (username ? database ?? "admin" : undefined),
+        defaultDatabase: database,
+        options: extra || undefined
+      },
+      hadPassword
+    };
+  } catch {
+    return { error: "The connection string has invalid %-escapes" };
+  }
 }
 
 function secretRef(value: unknown): SecretRefValue | undefined {
