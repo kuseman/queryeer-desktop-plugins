@@ -86,6 +86,40 @@ export function commandText(command: Record<string, unknown>): string {
   return `${JSON.stringify(command, null, 2)}\n`;
 }
 
+export type TemplateKind = "find" | "aggregate" | "count" | "distinct";
+
+/** Starting points for hand-written commands, with every common option present so it only needs editing, not looking up. */
+export const TEMPLATES: ReadonlyArray<{ id: TemplateKind; label: string; title: string }> = [
+  { id: "find", label: "find", title: "Filter, projection, sort, skip and limit" },
+  { id: "aggregate", label: "aggregate", title: "A pipeline: $match, $group, $sort, $limit" },
+  { id: "count", label: "count", title: "Count the documents matching a query" },
+  { id: "distinct", label: "distinct", title: "The distinct values of a field" }
+];
+
+/** A template command on `collection` ("collection" when none is known yet). */
+export function templateCommand(kind: TemplateKind, collection: string): Record<string, unknown> {
+  const name = collection || "collection";
+  switch (kind) {
+    case "find":
+      return { find: name, filter: {}, projection: {}, sort: { _id: 1 }, skip: 0, limit: BROWSE_LIMIT };
+    case "aggregate":
+      return {
+        aggregate: name,
+        pipeline: [
+          { $match: {} },
+          { $group: { _id: "$field", count: { $sum: 1 } } },
+          { $sort: { count: -1 } },
+          { $limit: BROWSE_LIMIT }
+        ],
+        cursor: {}
+      };
+    case "count":
+      return { count: name, query: {} };
+    case "distinct":
+      return { distinct: name, key: "field", query: {} };
+  }
+}
+
 /** Tab title for a collection action, e.g. "orders (Browse)". */
 export function queryTitle(collection: string, action: CollectionAction): string {
   return tabTitle(collection, COLLECTION_ACTIONS.find((a) => a.id === action)?.label ?? action);

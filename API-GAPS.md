@@ -36,6 +36,7 @@ Priority:
 | F20 Grid context menu doesn't name its file | P2 | ✅ Fixed in core (`226cb33`): `TableOutputContextMenuContext` has `fileId` and `engineId`, and `registerProvider` returns a `Disposable`. `when` expressions see them as `tableSelection.fileId` and `tableSelection.engineId`. |
 | F21 Plugins cannot read large cell values | P2 | Open |
 | F22 Warning on a successful query stays behind the grid | P2 | Open |
+| F23 Plugins cannot store a secret | P3 | Open |
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
@@ -244,6 +245,11 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Use case:** MongoDB warns when an empty result comes from a collection that does not exist (`{ find: "product" }` when the collection is `products`). The query succeeds, as it does in MongoDB, so the warning is the only hint. JDBC warnings on empty results (e.g. SQL Server messages) would show up the same way.
 - **Suggestion:** on `queryengine.completed`, select the Text output when the execution produced a `warning` or `error` message and returned no rows, unless the user picked an output during the run or a file output is active. Rows still win: a warning next to real results should not hide them.
 - **Not worked around** in the plugin: completing with `features` that leave out `rows` would hide the grid, and failing the query would turn a valid MongoDB read into an error.
+
+### F23 (P3): Plugins cannot store a secret
+- **Missing:** a secret reaches the vault only by typing into the host's `PasswordFieldInput`. A plugin cannot create a secret from a value it already has: `PasswordFieldInputProps` takes a `valueRef` and reports a new ref, and `PluginContext` has no vault access.
+- **Use case:** MongoDB's "Fill from connection string" reads `mongodb://user:password@host/…`. It fills every field but the password and asks the user to type the password again, which they just pasted.
+- **Suggestion:** `security.storeSecret(value): Promise<SecretRefValue>` (prompting for unlock like `PasswordFieldInput` does), or an `initialValue` on `PasswordFieldInput` that it stores as if typed.
 
 ## Backend (`backend-api` / protocol)
 

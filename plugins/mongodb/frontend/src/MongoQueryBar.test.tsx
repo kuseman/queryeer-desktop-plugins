@@ -292,11 +292,27 @@ describe("MongoQueryBar", () => {
       editor.type(browse.replace('"filter": {}', '"filter": { "status": "open" }'));
     });
     expect(container.textContent).toContain("Edited by hand");
-    expect(container.querySelector(".qmongo-qb-chip")).toBeNull();
+    expect(chip("Filter"), "no builders while off").toBeUndefined();
+    expect(chip("Templates"), "templates stay available").toBeDefined();
 
     await click(byLabel("Take over again"));
     expect(editor.text()).toBe(browse);
-    expect(container.querySelector(".qmongo-qb-chip")).not.toBeNull();
+    expect(chip("Filter")).toBeDefined();
+  });
+
+  it("replaces the editor text with a template on the current collection, which turns the bar off", async () => {
+    const browse = textFor(initialState("orders"));
+    editorState.set(QUERY_BAR_STATE_KEY, { state: initialState("orders"), written: browse });
+    const editor = fakeEditor(browse);
+    await mount(editor.handle);
+
+    await click(chip("Templates"));
+    const items = Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="menu"][aria-label="Templates"] [role="menuitem"]'));
+    expect(items.map((item) => item.querySelector(".qmongo-qb-item-name")?.textContent)).toEqual(["find", "aggregate", "count", "distinct"]);
+    await click(items[2]);
+    expect(JSON.parse(editor.text())).toEqual({ count: "orders", query: {} });
+    expect(executeCommand).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Edited by hand");
   });
 
   it("offers to take over a command it did not write, prefilling the collection", async () => {
