@@ -231,6 +231,8 @@ From the repository root (requires Java 25, Node 20+, and Docker for the Testcon
 | `npm run mongodb:dev` | Frontend watch mode. Rebuilds on save, copies the bundle into the installed plugin, and installs `dist/…` first if it isn't installed. Then use **Reload Window** in Queryeer. Set `QUERYEER_PLUGINS_DIR` to use another plugins directory |
 | `npm run mongodb:smoke` | Runs the end-to-end check in Queryeer's backend runner. Set `QUERYEER_DESKTOP_DIR` if the core checkout is not at `../queryeer-desktop/development` |
 
+To get a database that exercises the explorer and query bar, run [`scripts/seed-showcase.js`](scripts/seed-showcase.js) with `mongosh` against a local server. It creates `qmongo_showcase` with made-up data; see the script's header for what it covers.
+
 The plugin API comes from public registries: `@queryeer/api` from npm and `backend-api` / `backend-contract` from Maven Central, both 0.19.0. No Queryeer Desktop checkout is needed to build or test; only `mongodb:smoke` uses one.
 
 The plugin version lives in three places (API-GAPS.md F11):
