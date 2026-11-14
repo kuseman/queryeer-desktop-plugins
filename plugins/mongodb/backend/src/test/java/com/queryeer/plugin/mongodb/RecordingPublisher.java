@@ -8,6 +8,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
+import com.queryeer.backend.api.OutputEvent;
 import com.queryeer.backend.api.QueryPublisher;
 
 /** Records everything a provider publishes. Modelled on the RecordingPublisher in Queryeer's JDBC engine tests. */
@@ -19,6 +20,7 @@ final class RecordingPublisher implements QueryPublisher
 
     final List<ResultSet> resultSets = new CopyOnWriteArrayList<>();
     final List<String> terminalEvents = new CopyOnWriteArrayList<>();
+    final List<OutputEvent> messages = new CopyOnWriteArrayList<>();
     volatile String errorCode;
     volatile String errorMessage;
     volatile Map<String, Object> errorDetails;
@@ -52,6 +54,16 @@ final class RecordingPublisher implements QueryPublisher
                 .rows()
                 .addAll(new ArrayList<>(rows));
         onRows.accept(rows);
+    }
+
+    @Override
+    public void resultSetRows(List<List<Object>> rows, List<OutputEvent> events)
+    {
+        if (!rows.isEmpty())
+        {
+            resultSetRows(rows);
+        }
+        messages.addAll(events);
     }
 
     @Override

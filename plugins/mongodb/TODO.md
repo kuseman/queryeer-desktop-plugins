@@ -72,8 +72,12 @@ Redesigned 2026-11-13. Plain Filter/Projection/Sort text fields duplicated the e
 
 Through the public `tableOutputContextMenu`.
 
-- [ ] "Filter by this value": adds `field: value` to the query bar filter
-- [ ] "Copy as Extended JSON" for a cell, and "Copy document" for a row
+- [x] **Filter: field = value** and **Exclude: field ≠ value** on selected cells. Several values in one column become is one of / is none of, and several columns add one condition each (Filter only). The condition is added to the query bar's filter with AND, and the query runs.
+  - Only when the query bar wrote what the editor holds (never over hand edits), and not when the filter matches any of several conditions, which one more condition would change
+  - Types come from the column, and from the field sample for what the grid cannot tell apart: an ObjectId arrives as hex text, so a 24-hex value is an ObjectId only in a field sampled as one
+- [x] **Copy value as Extended JSON** for one cell (relaxed: `{"$oid": …}`, `{"$date": …}`, `{"$numberDecimal": …}`; embedded documents as the server wrote them)
+- [x] **Copy document(s) as Extended JSON** for the selected rows: fetched again by `_id` (`mongodb.documents`), so the copy is the whole document, not just the shown fields. When that is not possible (no `_id` column, an aggregation's output), it is rebuilt from the cells, leaving out null cells.
+- [ ] Large cells (over 16 KB) have no "Copy value": plugins only get a preview (API-GAPS.md F21)
 
 ## 4. Small polish
 
@@ -81,6 +85,7 @@ Through the public `tableOutputContextMenu`.
   - an optional `color` field in `connections.ts` (parse and serialize) and a colour input in `ConnectionsSettingsEditor.tsx`; the backend ignores unknown fields
   - applied to the read-only "connection | database" status label (`MongoStatusLabel` in `MongoConnectionView.tsx`) with `style={{ color }}`, as JDBC's `JdbcConnectionStatus.tsx` does
   - optionally, the editor tab coloured per connection with `context.layout.registerTabHeaderStyle`, keyed on `file.engineBinding.connectionId` (JDBC only colours the status label)
+- [x] Warn when an empty result comes from a collection that does not exist (MongoDB returns nothing instead of an error), with a "Did you mean" for names up to 2 edits away. One `listCollections`, only after empty find / aggregate / count / distinct results.
 - [ ] Paste a `mongodb://` / `mongodb+srv://` URI in the connection editor to fill the fields (credentials go to the vault, not settings)
 - [ ] Query templates in a new `.mongo` file (find, aggregate, count)
 - [x] Changelog generated from this plugin's commits since each `mongodb/v*` tag (`shared/scripts/generate-changelog.mjs`), packaged into the backend JAR and registered with `context.changelogs()` so it shows in the About dialog

@@ -36,6 +36,7 @@ import com.queryeer.backend.api.ConfigService;
 import com.queryeer.backend.api.FileSession;
 import com.queryeer.backend.api.LargeValueStore;
 import com.queryeer.backend.api.LoggerService;
+import com.queryeer.backend.api.OutputSeverity;
 import com.queryeer.backend.api.SecuritySessionClosedException;
 import com.queryeer.backend.api.SettingsModule;
 import com.queryeer.backend.contract.query.QueryExecuteOptions;
@@ -143,6 +144,30 @@ class MongoQueryEngineProviderContainerTest
         assertNull(result.rows()
                 .get(2)
                 .get(3));
+    }
+
+    @Test
+    void warnsWhenAnEmptyResultComesFromAMissingCollection()
+    {
+        RecordingPublisher typo = execute("{ \"find\": \"order\", \"filter\": {} }", local());
+        assertEquals(List.of("completed"), typo.terminalEvents);
+        assertEquals(1, typo.messages.size());
+        assertEquals(OutputSeverity.WARNING, typo.messages.get(0)
+                .severity());
+        assertEquals("Collection 'order' does not exist in database 'shop', so find returned nothing (MongoDB does not report missing collections as errors)."
+                     + " Did you mean 'orders'?", typo.messages.get(0)
+                             .message());
+
+        RecordingPublisher count = execute("{ \"count\": \"nothing_like_it\" }", local());
+        assertEquals(1, count.messages.size());
+        assertTrue(count.messages.get(0)
+                .message()
+                .endsWith("(MongoDB does not report missing collections as errors)."), "no suggestion when nothing is close");
+
+        RecordingPublisher noMatch = execute("{ \"find\": \"orders\", \"filter\": { \"status\": \"none\" } }", local());
+        assertEquals(List.of(), noMatch.messages, "an existing collection with no matches is not a problem");
+        RecordingPublisher distinct = execute("{ \"distinct\": \"orders\", \"key\": \"nope\" }", local());
+        assertEquals(List.of(), distinct.messages);
     }
 
     @Test
@@ -595,6 +620,25 @@ class MongoQueryEngineProviderContainerTest
         }
         assertThrows(IllegalArgumentException.class, () -> provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local",
                 "database", "shop", "collection", "orders", "field", "$where")));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void invokeReturnsWholeDocumentsByIdInOrder()
+    {
+        List<String> documents = (List<String>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_DOCUMENTS, Map.of("connectionId", "local", "database",
+                "shop", "collection", "orders", "ids", "[3, { \"$numberLong\": \"1\" }, 99]"));
+
+        assertEquals(2, documents.size(), "an id that matches nothing is left out");
+        assertEquals(3, Document.parse(documents.get(0))
+                .getInteger("_id"), "in the order asked for");
+        assertEquals("late", Document.parse(documents.get(0))
+                .getString("note"));
+        assertEquals(1, Document.parse(documents.get(1))
+                .getInteger("_id"), "a long id finds an int _id, as the query does");
+        assertTrue(documents.get(1)
+                .lines()
+                .count() > 1, "indented for reading");
     }
 
     @Test

@@ -39,6 +39,7 @@ import {
   withCollection,
   withLimit,
   withProjectionMode,
+  guessCollection,
   type BarState,
   type Condition,
   type StoredBar
@@ -191,11 +192,6 @@ function useEditorText(context: PluginContext, fileId: string): string | undefin
   return text;
 }
 
-/** Prefills the collection when taking over a command the bar did not write, e.g. an explorer Sample or Count. */
-function guessCollection(text: string): string {
-  const match = /["']?(?:find|aggregate|count|distinct|listIndexes)["']?\s*:\s*["']([^"']+)["']/.exec(text);
-  return match ? match[1] : "";
-}
 
 /**
  * Collection combobox. Opening it lists every collection and view (system collections left out); typing filters.

@@ -1,7 +1,9 @@
 package com.queryeer.plugin.mongodb;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
 import org.bson.BsonArray;
@@ -10,10 +12,13 @@ import org.bson.BsonInt64;
 import org.bson.BsonString;
 import org.bson.BsonValue;
 
+import com.mongodb.MongoException;
 import com.mongodb.MongoOperationTimeoutException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoDatabase;
 import com.queryeer.backend.api.LoggerService;
+import com.queryeer.backend.api.OutputEvent;
+import com.queryeer.backend.api.OutputSeverity;
 
 /**
  * The "execute" stage: runs one {@link ParsedCommand} and publishes its reply as one result set.
@@ -84,11 +89,22 @@ final class CommandRunner
         if (cursor != null
                 && cursor.isDocument())
         {
-            return publishCursor(execution, client, cursor.asDocument(), writer, deadline);
+            long rowCount = publishCursor(execution, client, cursor.asDocument(), writer, deadline);
+            if (rowCount == 0)
+            {
+                warnIfMissingCollection(execution, client, database, parsed);
+            }
+            return rowCount;
         }
 
         List<BsonDocument> rows;
         String name = parsed.name();
+        boolean empty = "distinct".equals(name) && reply.getArray("values", new BsonArray())
+                .isEmpty()
+                || "count".equals(name) && reply.get("n") instanceof BsonValue n
+                        && n.isNumber()
+                        && n.asNumber()
+                                .longValue() == 0;
         if ("distinct".equals(name))
         {
             rows = new ArrayList<>();
@@ -110,7 +126,85 @@ final class CommandRunner
 
         writer.start(rows, false);
         writer.write(rows);
+        if (empty)
+        {
+            warnIfMissingCollection(execution, client, database, parsed);
+        }
         return writer.rowCount();
+    }
+
+    /** Commands that read one named collection, and return nothing rather than fail when it does not exist. */
+    private static final List<String> COLLECTION_READS = List.of("find", "aggregate", "count", "distinct");
+    /** Collection names this close (edits) to a missing one are suggested. */
+    private static final int SUGGESTION_MAX_DISTANCE = 2;
+
+    /**
+     * MongoDB answers a read of a missing collection with an empty result, not an error, so a typo in the name looks like "no matches". After an empty result,
+     * warns when the collection does not exist, suggesting a close name. Costs one {@code listCollections}, and only on empty results.
+     */
+    private void warnIfMissingCollection(Execution execution, MongoClient client, String database, ParsedCommand parsed)
+    {
+        if (!COLLECTION_READS.contains(parsed.name())
+                || !(parsed.command()
+                        .get(parsed.name()) instanceof BsonString target))
+        {
+            return; // e.g. { aggregate: 1 }, a database-level pipeline
+        }
+        String collection = target.getValue();
+        List<String> names;
+        try
+        {
+            names = client.getDatabase(database)
+                    .listCollectionNames()
+                    .into(new ArrayList<>());
+        }
+        catch (MongoException e)
+        {
+            logger.info("Could not list collections to check for a missing collection: " + e.getMessage());
+            return; // e.g. no listCollections privilege: say nothing rather than guess
+        }
+        if (names.contains(collection))
+        {
+            return;
+        }
+        String suggestion = names.stream()
+                .filter(name -> distance(name, collection) <= SUGGESTION_MAX_DISTANCE)
+                .min(Comparator.comparingInt((String name) -> distance(name, collection))
+                        .thenComparing(Comparator.naturalOrder()))
+                .map(name -> " Did you mean '" + name + "'?")
+                .orElse("");
+        String message = "Collection '" + collection + "' does not exist in database '" + database + "', so " + parsed.name()
+                         + " returned nothing (MongoDB does not report missing collections as errors)."
+                         + suggestion;
+        execution.publisher()
+                .resultSetRows(List.of(), List.of(new OutputEvent(OutputSeverity.WARNING, message)));
+    }
+
+    /** Levenshtein distance, ignoring case. */
+    static int distance(String a, String b)
+    {
+        String x = a.toLowerCase(Locale.ROOT);
+        String y = b.toLowerCase(Locale.ROOT);
+        int[] previous = new int[y.length() + 1];
+        int[] current = new int[y.length() + 1];
+        for (int j = 0; j <= y.length(); j++)
+        {
+            previous[j] = j;
+        }
+        for (int i = 1; i <= x.length(); i++)
+        {
+            current[0] = i;
+            for (int j = 1; j <= y.length(); j++)
+            {
+                int substitution = previous[j - 1] + (x.charAt(i - 1) == y.charAt(j - 1) ? 0
+                        : 1);
+                current[j] = Math.min(substitution, Math.min(previous[j], current[j - 1]) + 1);
+            }
+            int[] swap = previous;
+            previous = current;
+            current = swap;
+        }
+        return previous[y.length()];
     }
 
     private long publishCursor(Execution execution, MongoClient client, BsonDocument cursor, ResultSetWriter writer, Deadline deadline)
