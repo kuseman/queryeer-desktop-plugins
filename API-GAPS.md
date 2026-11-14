@@ -2,7 +2,7 @@
 
 Things found while building plugins in this repository that a third-party plugin cannot do, or can only do by copying host internals. Each entry says what is missing, where the host has it internally, what this repo does instead, and a suggested fix.
 
-Found while building: MongoDB (`plugins/mongodb`). Last updated: 2026-11-13. References are to the Queryeer Desktop repository at commit `52bc815`.
+Found while building: MongoDB (`plugins/mongodb`). Last updated: 2026-11-14. References are to the Queryeer Desktop repository at commit `52bc815`.
 
 Priority:
 - **P1**: a real plugin needs it or has to duplicate meaningful code.
@@ -19,19 +19,21 @@ Priority:
 | F2 Form primitives and styles | P1 | ✅ Fixed in core: stable theme variables documented in `DEVELOPMENT-PLUGIN.md`. MongoDB's CSS uses them. |
 | F3 Open Settings at a setting | P2 | ✅ Fixed in core: `settings.open(settingId?)`. MongoDB's ⚙ action and empty state use it. |
 | F4 One call to register a file type | P2 | Open |
-| F5 Monaco language features | P2 | Open (needs design) |
+| F5 Monaco language features | P2 | Partly fixed in core (`0b1819f`): `editorLanguages.registerLanguage({ id, aliases, monarch, configuration })`, a plugin-defined language without validation. Completion, hover and diagnostics are still open (needs design). |
 | F6 Inconsistent `Disposable` returns | P2 | Open |
 | F7 Late settings registration | P2 | ✅ Fixed in core: `registerSettings` refreshes by itself. |
 | F8 ID helpers | P3 | Open |
-| F9 `@queryeer/api` version | P3 | Open: still `0.18.0`, must be `0.19.0` at release |
+| F9 `@queryeer/api` version | P3 | ✅ Handled by the release workflow: `create-release.yml` sets `@queryeer/api` to the release version, and since `e0eb735` also the examples' and `DEVELOPMENT-PLUGIN.md`'s ranges. The next release must be a **minor** one (0.19.0). |
 | F10 `invoke` return shape | P3 | Open |
 | F11 Plugin identity declared twice | P3 | Open |
 | F13 Persistence hook drops a pending save | P2 | ✅ Fixed in core: the hook flushes pending items on unmount and always calls the latest `persist`. MongoDB's workaround removed. |
 | F14 New-file list ignores plugin file types | P1 | ✅ Fixed in core: types the setting doesn't mention are appended as enabled, and per-type New commands are registered lazily when the File menu is built. Cause 3 (menu rebuild) was already handled: bootstrap rebuilds the menu after `host.start`. |
 | F15 `settings.open(id)` ignored after a search | P2 | ✅ Fixed in core: a pending request first clears the search and resolves only against the unfiltered tree. |
-| F16 Open a new query tab with text (and run it) | P1 | Open (workaround in MongoDB `queryFiles.ts`) |
+| F16 Open a new query tab with text (and run it) | P1 | ✅ Fixed in core (`975690c`): `createUntitledFile({ initialContent })` and `queryEngines.execute({ fileId, text? })`. Follow-ups in `150ef9f`: run requests aimed at a file are neither lost nor run late. MongoDB still uses its workaround in `queryFiles.ts` until it moves to the new API. |
 | F17 Engine-scoped header strip in the query editor | P1 | ✅ Fixed in core (not yet committed): `queryEngines.registerEditorHeaderItem({ id, engineId, title, order, render })`, collapsible per file. Host keybindings work inside it; `data-keybinding-scope="input"` is a local opt-out. |
 | F18 JDBC sidebar rebinds other engines' files to `jdbc` | P1 | ✅ Fixed in core (not yet committed): a MIME type claimed by an engine is owned by it. `bindEngine` and `updateFile` reject foreign bindings (the existing binding is kept), restore/registration drops misbound ones, and the JDBC view/selector only act on SQL files. |
+| F19 Editor group steals focus from portalled popups | P3 | ✅ Fixed in core (`7de8251`): the group only takes focus for targets inside its own DOM node. MongoDB's button options still work and can stay. |
+| F20 Grid context menu doesn't name its file | P2 | ✅ Fixed in core (`226cb33`): `TableOutputContextMenuContext` has `fileId` and `engineId`, and `registerProvider` returns a `Disposable`. `when` expressions see them as `tableSelection.fileId` and `tableSelection.engineId`. |
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
@@ -83,6 +85,16 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Missing:** a plugin cannot register a JSON schema, completion, hover or diagnostics for its language. Completion and hover are wired to `sql` only (`core.queryengine/sql-completion-language.ts`, `sql-hover-language.ts`).
 - **Suggestion:** a language-features contribution backed by `queryEngines.invoke` actions, generalising the `sql.complete` / `sql.hover` / `sql.symbolAtPosition` actions to any engine and language.
 
+- **Minimal slice, needed first:** MongoDB's shell syntax (`db.orders.find({...}).sort({...})`, TODO item 5) cannot live in a `json`-mapped editor: Monaco's JSON validation marks it as an error. Mapping to `javascript` doesn't work either, because a JSON command document at the start of a line parses as a block statement and is flagged too. A plugin needs to register its own language before any completion work:
+  ```ts
+  editorLanguages.registerLanguage({
+    id: "mongodb",
+    monarch,        // Monaco Monarch tokenizer
+    configuration,  // brackets, comments, auto-closing pairs
+  }): Disposable
+  ```
+  with no validation, then `registerMimeType(MIME, "mongodb")` as today. Completion and hover (above) can follow later.
+
 ### F6 (P2): Inconsistent `Disposable` returns
 - **Return a `Disposable`:** `queryEngines.*`, `editorLanguages.*`, `capabilities.registerCapabilities`.
 - **Return nothing:**
@@ -107,6 +119,10 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 ### F9 (P3): `@queryeer/api` version
 - **Mismatch:** in commit `52bc815`, `packages/api/package.json` is `0.18.0`, while `DEVELOPMENT-PLUGIN.md` and the examples require `^0.19.0` for the new APIs.
 - **Fix:** bump it in the release, otherwise `^0.19.0` cannot resolve.
+- **Resolved:** no manual bump is needed.
+  - `create-release.yml` runs `npm version` for both `@queryeer/app` and `@queryeer/api`. The bump type defaults to `minor`, so the next release is 0.19.0.
+  - Since `e0eb735`, the same release commit also sets the `@queryeer/api` ranges in `plugins-examples/*/package.json` (both peer and dev) and in the guide's snippets. The step fails if any range is missed.
+  - **Watch for:** starting the release as a patch would publish the new APIs as 0.18.1, which `^0.19.0` doesn't match.
 
 ### F10 (P3): `invoke` return shape
 - **Behaviour:** `context.queryEngines.invoke` resolves to the backend provider's return value. Over the raw stdio protocol, the same value arrives as `response.result.result`.
@@ -159,6 +175,13 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 
   This depends on timing (editor mount, command enablement) and on the new tab becoming active.
 - **Suggestion:** `fileMediator.createUntitledFile({ ..., initialContent })` plus `queryEngines.execute({ fileId, text? })`. Or a single `queryEngines.openQuery({ mimeType, title, text, engineBinding, editorState, execute })`.
+- **Fixed** in `975690c`, with follow-ups in `150ef9f`:
+  - A request is no longer lost when the editor switches to the file while it is still starting another run. The request waits and runs once that start finishes.
+  - A request aimed at a file that no editor shows expires after 10 seconds (`TARGETED_EXECUTE_REQUEST_TTL_MS`) instead of running much later. Expired requests are logged with `console.debug`.
+  - An editor that defers a request holds it (`holdExecuteRequest`), which clears the expiry, so a slow start such as a vault unlock prompt doesn't drop it. Every path a request can take to the editor holds it: a file switch, a finished start, and the execute-request listener when the file is already shown.
+  - If the editor leaves the file before taking a held request, it releases it (`releaseExecuteRequest`), which restarts the 10 seconds.
+- **Older issue, fixed in `5b1c8d8`:** an untargeted run request that the active editor turns down, because it is still starting a run, is now dropped instead of staying queued. Untargeted requests also get the 10-second limit as a backstop.
+- **Plugin side:** MongoDB isn't affected, because it runs either a tab it just created or the active tab, where no other run is starting.
 
 ### F17 (P1): Engine-scoped header strip in the query editor
 - **Missing:** a place for a query engine to render UI at the top of its query editor, between the tab strip and the text.
@@ -195,6 +218,19 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Related:** the query editor header (F17) and status bar pick the engine binding-first (`engineBinding.engineId ?? MIME owner`), so a misbound file also shows the wrong engine's items. With the invariant (level 2) the binding always matches the MIME owner, so they need no change.
 - **Test:** switch from a SQL tab to a `.mongo` tab bound to `{ engineId: "mongodb", connectionId: "x" }` and assert the binding is unchanged. Also call `bindEngine(mongoFileId, "jdbc")` and assert it is rejected.
 - **Plugin side:** no workaround. A plugin shouldn't have to police its files' bindings. To recover an affected tab today, Ctrl+click an action in the MongoDB explorer, which rebinds the current tab to MongoDB, or copy the text into a new MongoDB tab.
+
+### F19 (P3): Editor group steals focus from portalled popups
+- **Behaviour:** the editor group's `onMouseDownCapture={focusEditorGroupFromPointer}` (`renderer/shell/ShellApp.tsx:922`, defined at 800) moves focus to the editor group unless the target is an input, button or similar control.
+- **Why plugins hit it:** React events from a portal bubble through the React tree, not the DOM tree. A popup that a header item (F17) or any editor contribution portals to `document.body`, for example so the text pane's `overflow: hidden` does not clip it, still runs this handler. A mousedown on a non-control element in the popup (a `div` list option) moves focus out of the plugin's input. The input's blur then closes the popup before the option's handler runs.
+- **Workaround here:** the query bar's combobox options are `<button type="button" tabIndex={-1}>` with `onMouseDown` `preventDefault()`. `MongoQueryBar.test.tsx` wraps the bar in a copy of the host handler (`HostEditorGroup`) to keep this covered.
+- **Suggestion:** ignore events whose target is outside the group's own DOM node: `if (!(event.currentTarget as Node).contains(event.target as Node)) return;`.
+
+### F20 (P2): Grid context menu doesn't name its file
+- **Missing:** `TableOutputContextMenuContext` has `resultSetIndex`, `columns`, `selection` and `cellValuesByRow`, but not the file whose results are shown. The grid has it: `TableGrid` receives `fileId` and builds the menu context without it (`core.queryengine.output.table/plugin.tsx:454`).
+- **Use case:** MongoDB's "Filter by this value" (TODO item 3) adds a condition to the query bar of the file the grid belongs to. Using the active file instead is a guess that breaks with split editors or when focus is elsewhere.
+- **Suggestion:** add `fileId?: string` (and, for convenience, the file's `engineId`) to `TableOutputContextMenuContext`. `registerProvider` should also return a `Disposable` (F6).
+- **Fixed** in `226cb33`. `getItems` receives `fileId` and `engineId`, and `registerProvider` returns a `Disposable`. Disposing a stale registration doesn't remove a provider that replaced it.
+- **`when` expressions:** provider, item and user table action `when` expressions see the same values as `tableSelection.fileId` and `tableSelection.engineId`, registered as when-expression variables, e.g. `when: "tableSelection.engineId == 'mongodb'"`.
 
 ## Backend (`backend-api` / protocol)
 

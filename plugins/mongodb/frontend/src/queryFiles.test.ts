@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PluginContext } from "@queryeer/api/plugin/Plugin";
-import { isReuseClick, replaceInActiveQuery, runGeneratedQuery } from "./queryFiles.js";
+import { isReuseClick, openQueryFile, replaceInActiveQuery, runGeneratedQuery } from "./queryFiles.js";
 import { DATABASE_STATE_KEY, MIME_TYPE } from "./constants.js";
 
 function fakeContext(active: { mimeType: string; connectionId?: string } | undefined, executed = true) {
@@ -21,6 +21,7 @@ function fakeContext(active: { mimeType: string; connectionId?: string } | undef
       bindEngine: vi.fn(async () => undefined),
       createUntitledFile: vi.fn(async () => ({ fileId: "new" }))
     },
+    queryEngines: { execute: vi.fn() },
     commands: { executeCommand: vi.fn(async () => ({ commandId: "core.queryengine.execute", executed, reason: executed ? undefined : "disabled" })) },
     notifications: { notify: vi.fn() }
   };
@@ -57,6 +58,26 @@ describe("replaceInActiveQuery", () => {
     const { context, mocks } = fakeContext({ mimeType: MIME_TYPE, connectionId: "prod" }, false);
     await replaceInActiveQuery(context, options);
     expect(mocks.notifications.notify).toHaveBeenCalledWith(expect.objectContaining({ severity: "warning" }));
+  });
+});
+
+describe("openQueryFile", () => {
+  it("creates the tab with the query as its content, binds it, then runs that file", async () => {
+    const { context, mocks } = fakeContext(undefined);
+    await openQueryFile(context, options);
+
+    expect(mocks.fileMediator.createUntitledFile).toHaveBeenCalledWith(expect.objectContaining({ mimeType: MIME_TYPE, initialContent: options.text }));
+    expect(mocks.fileMediator.bindEngine).toHaveBeenCalledWith("new", "mongodb", "prod");
+    expect(mocks.files.setEditorState).toHaveBeenCalledWith("new", DATABASE_STATE_KEY, { connectionId: "prod", database: "shop" });
+    expect(mocks.queryEngines.execute).toHaveBeenCalledWith({ fileId: "new", text: options.text });
+    expect(mocks.fileMediator.bindEngine.mock.invocationCallOrder[0]).toBeLessThan(mocks.queryEngines.execute.mock.invocationCallOrder[0]);
+    expect(mocks.commands.executeCommand).not.toHaveBeenCalled();
+  });
+
+  it("does not run when only opening", async () => {
+    const { context, mocks } = fakeContext(undefined);
+    await openQueryFile(context, { ...options, execute: false });
+    expect(mocks.queryEngines.execute).not.toHaveBeenCalled();
   });
 });
 
