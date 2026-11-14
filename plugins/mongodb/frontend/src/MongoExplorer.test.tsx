@@ -13,7 +13,11 @@ const responses: Record<string, unknown> = {
     { name: "orders", type: "collection", count: 3, validator: "{\"$jsonSchema\": {}}", validationLevel: "strict", validationAction: "warn" },
     { name: "system.profile", type: "collection", count: 10 }
   ],
-  [ACTION_FIELDS]: [{ name: "_id", types: ["objectId"], count: 3, sampled: 3 }],
+  [ACTION_FIELDS]: [
+    { name: "_id", types: ["objectId"], count: 3, sampled: 3 },
+    { name: "payload", types: ["object"], count: 3, sampled: 3 },
+    { name: "payload.orderId", types: ["int"], count: 2, sampled: 3, parent: "payload" }
+  ],
   [ACTION_INDEXES]: [{ name: "_id_", key: "{\"_id\": 1}", unique: false }]
 };
 
@@ -63,6 +67,13 @@ describe("MongoExplorer", () => {
     expect(container.textContent).toContain("_id_");
     expect(container.textContent).toContain("Validator");
     expect(container.textContent).toContain("warn");
+
+    // Embedded fields sit under their parent, labelled by their own key
+    expect(container.textContent).not.toContain("orderId");
+    await click("Expand payload");
+    const child = Array.from(container.querySelectorAll(".qmongo-tree-label")).find((label) => label.textContent === "orderId");
+    expect(child).toBeDefined();
+    expect(child!.closest(".qmongo-tree-row")!.getAttribute("title")).toContain("payload.orderId: int");
   });
 
   it("offers Stats on a database, and Slowest queries when system.profile exists", async () => {

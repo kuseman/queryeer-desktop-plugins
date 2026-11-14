@@ -22,6 +22,7 @@ export const ACTION_TEST_CONNECTION = "mongodb.testConnection";
 export const ACTION_COLLECTIONS = "mongodb.collections";
 export const ACTION_INDEXES = "mongodb.indexes";
 export const ACTION_FIELDS = "mongodb.fields";
+export const ACTION_VALUES = "mongodb.values";
 
 /** Per-file editor state key holding the query bar's state and the text it last wrote ({@link StoredBar} in queryBarModel.ts). */
 export const QUERY_BAR_STATE_KEY = `${PLUGIN_ID}.queryBar`;

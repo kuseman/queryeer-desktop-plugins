@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PluginContext } from "@queryeer/api/plugin/Plugin";
 import type { EditorHandle } from "@queryeer/api/editor/EditorCapability";
-import { ACTION_COLLECTIONS, ACTION_FIELDS, CONNECTIONS_SETTING_ID, DATABASE_STATE_KEY, MIME_TYPE, QUERY_BAR_STATE_KEY } from "./constants.js";
+import { ACTION_COLLECTIONS, ACTION_FIELDS, ACTION_VALUES, CONNECTIONS_SETTING_ID, DATABASE_STATE_KEY, MIME_TYPE, QUERY_BAR_STATE_KEY } from "./constants.js";
 import { clearExplorerCache } from "./MongoExplorer.js";
 import { MongoQueryBar } from "./MongoQueryBar.js";
 import { initialState, textFor } from "./queryBarModel.js";
@@ -97,7 +97,16 @@ async function mount(editor: EditorHandle): Promise<void> {
     commands: { executeCommand },
     notifications: { notify: vi.fn() },
     queryEngines: {
-      invoke: async ({ action }: { action: string }) => {
+      invoke: async ({ action, payload }: { action: string; payload?: { field?: string } }) => {
+        if (action === ACTION_VALUES) {
+          if (payload?.field === "status") {
+            return { values: [{ type: "string", text: "new" }, { type: "string", text: "paid" }], complete: true };
+          }
+          // A large collection: values from a sample
+          return payload?.field === "total"
+            ? { values: [{ type: "double", text: "5" }, { type: "double", text: "7.5" }], complete: true, sampled: 1000 }
+            : { values: [], complete: false };
+        }
         if (action === ACTION_COLLECTIONS) {
           return [
             { name: "customers", type: "collection", count: 2 },
@@ -110,7 +119,9 @@ async function mount(editor: EditorHandle): Promise<void> {
           return [
             { name: "_id", types: ["objectId"], count: 3, sampled: 3 },
             { name: "status", types: ["string"], count: 3, sampled: 3 },
-            { name: "total", types: ["double"], count: 3, sampled: 3 }
+            { name: "total", types: ["double"], count: 3, sampled: 3 },
+            { name: "payload", types: ["object"], count: 3, sampled: 3 },
+            { name: "payload.orderId", types: ["int"], count: 3, sampled: 3, parent: "payload" }
           ];
         }
         return [];
@@ -242,8 +253,16 @@ describe("MongoQueryBar", () => {
     await click(checkbox("total"));
     expect(JSON.parse(editor.text()).projection).toEqual({ status: 1, total: 1, _id: 0 });
     expect(chip("Fields").textContent).toContain("2 fields");
+    // An embedded field shows its parent, and replaces the parent when checked
+    await click(checkbox("payload"));
+    await click(checkbox("payload.orderId"));
+    expect(JSON.parse(editor.text()).projection).toEqual({ status: 1, total: 1, "payload.orderId": 1, _id: 0 });
+    await click(checkbox("payload.orderId"));
 
     await click(chip("Sort"));
+    const sortFields = Array.from(document.body.querySelector<HTMLSelectElement>('select[aria-label="Add sort field"]')!.options).map((o) => o.value);
+    expect(sortFields).toContain("payload.orderId");
+    expect(sortFields, "no sorting by a whole document").not.toContain("payload");
     await choose(document.body.querySelector<HTMLSelectElement>('select[aria-label="Add sort field"]')!, "total");
     await click(byLabel("Sort total descending"));
     expect(JSON.parse(editor.text()).sort).toEqual({ total: -1 });
@@ -354,6 +373,70 @@ describe("MongoQueryBar filter", () => {
 
     await click(byLabel("Remove condition 1"));
     expect(JSON.parse(editor.text()).filter).toEqual({ status: { $regex: "pai", $options: "i" } });
+  });
+
+  it("suggests the field's values, also for lists", async () => {
+    editorState.set(QUERY_BAR_STATE_KEY, { state: initialState("orders"), written: textFor(initialState("orders")) });
+    const editor = fakeEditor(textFor(initialState("orders")));
+    await mount(editor.handle);
+
+    await click(chip("Filter"));
+    await until(() => byLabel("+ Add condition") !== undefined);
+    await click(byLabel("+ Add condition"));
+    await choose(conditionControl<HTMLSelectElement>(1, "field"), "status");
+    const suggestions = (): string[] =>
+      Array.from(document.body.querySelectorAll<HTMLOptionElement>('datalist[aria-label="Condition 1 suggested values"] option')).map((o) => o.value);
+    await until(() => suggestions().length > 0);
+    expect(suggestions()).toEqual(["new", "paid"]);
+    expect(conditionControl<HTMLInputElement>(1, "value").getAttribute("list")).toBeTruthy();
+    const note = (): string | undefined => document.body.querySelector('[role="group"][aria-label="Condition 1"] [role="note"]')?.textContent ?? undefined;
+    expect(note(), "a complete list needs no note").toBeUndefined();
+
+    await choose(conditionControl<HTMLSelectElement>(1, "operator"), "in");
+    await typeInto(conditionControl<HTMLInputElement>(1, "value"), "new, ");
+    expect(suggestions()).toEqual(["new, paid"]);
+
+    // Values from a sample say so in the row itself, not only in a tooltip
+    await choose(conditionControl<HTMLSelectElement>(1, "field"), "total");
+    await choose(conditionControl<HTMLSelectElement>(1, "operator"), "eq");
+    await until(() => suggestions().length > 0);
+    expect(suggestions()).toEqual(["5", "7.5"]);
+    expect(note()).toContain("random sample of 1,000 documents");
+    expect(note()).toContain("Other values may exist");
+
+    // A field sampled only as embedded documents can only be tested for presence
+    await choose(conditionControl<HTMLSelectElement>(1, "field"), "payload");
+    expect(Array.from(conditionControl<HTMLSelectElement>(1, "operator").options).map((o) => o.value)).toEqual(["exists", "missing"]);
+    expect(JSON.parse(editor.text()).filter).toEqual({ payload: { $exists: true } });
+    // ...and continues as typing below it, so a deeper path can be written
+    const typed = conditionControl<HTMLInputElement>(1, "field");
+    expect(typed.tagName).toBe("INPUT");
+    expect(typed.value).toBe("payload.");
+    expect(document.activeElement).toBe(typed);
+    // Leaving without typing more keeps the parent and goes back to the list
+    await blur(typed);
+    expect(conditionControl<HTMLSelectElement>(1, "field").tagName).toBe("SELECT");
+    expect(JSON.parse(editor.text()).filter).toEqual({ payload: { $exists: true } });
+    // "Other field…" on a document field starts below it too
+    await choose(conditionControl<HTMLSelectElement>(1, "field"), "\u0000other");
+    expect(conditionControl<HTMLInputElement>(1, "field").value).toBe("payload.");
+    await typeInto(conditionControl<HTMLInputElement>(1, "field"), "payload.source.system");
+    await press(conditionControl<HTMLInputElement>(1, "field"), "Enter");
+    // Below a document, the row is no longer a document: it reads text with =
+    expect(conditionControl<HTMLSelectElement>(1, "operator").value).toBe("eq");
+    expect(conditionControl<HTMLSelectElement>(1, "value type").value).toBe("string");
+    await typeInto(conditionControl<HTMLInputElement>(1, "value"), "pos");
+    await blur(conditionControl<HTMLInputElement>(1, "value"));
+    expect(JSON.parse(editor.text()).filter).toEqual({ "payload.source.system": "pos" });
+    await typeInto(conditionControl<HTMLInputElement>(1, "field"), "");
+    await blur(conditionControl<HTMLInputElement>(1, "field"));
+
+    // A field with too many values gets a plain input
+    await choose(conditionControl<HTMLSelectElement>(1, "field"), "payload.orderId");
+    await choose(conditionControl<HTMLSelectElement>(1, "operator"), "eq");
+    expect(suggestions()).toEqual([]);
+    expect(conditionControl<HTMLInputElement>(1, "value").getAttribute("list")).toBeNull();
+    expect(note()).toBeUndefined();
   });
 
   it("filters on a field path that is not in the sample", async () => {

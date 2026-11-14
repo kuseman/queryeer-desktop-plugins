@@ -10,7 +10,8 @@ export type SortKey = { field: string; direction: 1 | -1 };
 export type Projection = { mode: "include" | "exclude"; fields: string[] };
 
 /** How a condition's value text is read. */
-export type ValueType = "string" | "number" | "decimal" | "date" | "objectId" | "boolean" | "null";
+/** How a filter value is read. `document` marks a field sampled only as embedded documents, which can only be tested for presence. */
+export type ValueType = "string" | "number" | "decimal" | "date" | "objectId" | "boolean" | "null" | "document";
 
 export type Operator =
   | "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "in" | "nin"
@@ -139,9 +140,14 @@ export function withCollection(state: BarState, collection: string): BarState {
   return { ...initialState(collection), limit: state.limit };
 }
 
+/**
+ * Checks or unchecks a field. Checking a field unchecks its parent and its own fields (`payload` vs `payload.orderId`): MongoDB rejects
+ * a projection naming both ("path collision").
+ */
 export function toggleProjectionField(state: BarState, field: string): BarState {
   const { fields } = state.projection;
-  const next = fields.includes(field) ? fields.filter((f) => f !== field) : [...fields, field];
+  const overlaps = (other: string): boolean => other === field || other.startsWith(`${field}.`) || field.startsWith(`${other}.`);
+  const next = fields.includes(field) ? fields.filter((f) => f !== field) : [...fields.filter((f) => !overlaps(f)), field];
   return { ...state, projection: { ...state.projection, fields: next } };
 }
 
@@ -208,7 +214,9 @@ export function rangeLabel(state: BarState): string {
 
 // The filter: rows of field · operator · typed value, combined with AND or OR.
 
-export const VALUE_TYPES: readonly ValueType[] = ["string", "number", "decimal", "date", "objectId", "boolean", "null"];
+export const VALUE_TYPES: readonly ValueType[] = ["string", "number", "decimal", "date", "objectId", "boolean", "null", "document"];
+/** The value types offered in a row's type list; `document` comes only from the sample. */
+export const CHOOSABLE_VALUE_TYPES: readonly ValueType[] = VALUE_TYPES.filter((type) => type !== "document");
 
 export const VALUE_TYPE_LABELS: Record<ValueType, string> = {
   string: "text",
@@ -217,7 +225,8 @@ export const VALUE_TYPE_LABELS: Record<ValueType, string> = {
   date: "date",
   objectId: "ObjectId",
   boolean: "true/false",
-  null: "null"
+  null: "null",
+  document: "document"
 };
 
 export const OPERATORS: readonly Operator[] = ["eq", "ne", "gt", "gte", "lt", "lte", "in", "nin", "contains", "startsWith", "regex", "exists", "missing"];
@@ -246,6 +255,9 @@ export function operatorsFor(type: ValueType): Operator[] {
     case "boolean":
     case "null":
       return ["eq", "ne", "exists", "missing"];
+    case "document":
+      // Comparing whole documents needs the exact field order; only presence is useful
+      return ["exists", "missing"];
     default:
       return ["eq", "ne", "gt", "gte", "lt", "lte", "in", "nin", "exists", "missing"];
   }
@@ -269,6 +281,9 @@ export function valueTypeFor(types: readonly string[]): ValueType {
   if (real.every((type) => NUMERIC_TYPES.includes(type))) {
     return "number";
   }
+  if (real.every((type) => type === "object")) {
+    return "document";
+  }
   switch (real[0]) {
     case "decimal":
       return "decimal";
@@ -290,12 +305,12 @@ export function valueTypeFor(types: readonly string[]): ValueType {
 /** A new row for a field, typed from its sampled types. */
 export function newCondition(field: string, types: readonly string[] = []): Condition {
   const type = valueTypeFor(types);
-  return { field, op: "eq", type, value: type === "boolean" ? "true" : "" };
+  return { field, op: operatorsFor(type)[0], type, value: type === "boolean" ? "true" : "" };
 }
 
 /** Changing the type keeps the operator when it still applies, otherwise falls back to "=". */
 export function withValueType(condition: Condition, type: ValueType): Condition {
-  const op = operatorsFor(type).includes(condition.op) ? condition.op : "eq";
+  const op = operatorsFor(type).includes(condition.op) ? condition.op : operatorsFor(type)[0];
   const value = type === "boolean" ? (condition.value === "false" ? "false" : "true") : type === "null" ? "" : condition.value;
   return { ...condition, type, op, value };
 }
@@ -333,6 +348,8 @@ export function parseValue(type: ValueType, text: string): { value: unknown } | 
       const time = /^\d{4}-\d{2}-\d{2}T/.test(iso) ? Date.parse(iso) : NaN;
       return Number.isNaN(time) ? { error: "Use a date like 2026-11-14 or 2026-11-14T08:30:00Z" } : { value: { $date: new Date(time).toISOString() } };
     }
+    case "document":
+      return { error: "A document can only be tested with exists or is missing" };
     case "objectId":
       return /^[0-9a-fA-F]{24}$/.test(trimmed) ? { value: { $oid: trimmed.toLowerCase() } } : { error: "An ObjectId is 24 hex characters" };
   }
@@ -488,4 +505,39 @@ export function filterSummary(filter: Filter): string {
   }
   const value = only.type === "null" ? "null" : only.type === "string" && only.op === "eq" ? `"${only.value}"` : only.value;
   return `${only.field} ${OPERATOR_LABELS[only.op]} ${value}`;
+}
+
+/** A distinct value of a field as the backend lists it: its `$type` name and its text. */
+export type SuggestedValue = { type: string; text: string };
+
+/** Whether a row can use value suggestions: comparisons and lists, on types where a short list of values is likely. */
+export function suggestsValues(condition: Condition): boolean {
+  return condition.field.trim() !== "" && condition.field !== "_id"
+    && ["eq", "ne", "gt", "gte", "lt", "lte", "in", "nin"].includes(condition.op)
+    && ["string", "number", "decimal"].includes(condition.type);
+}
+
+/**
+ * The suggestions for a row's value input: the field's values that read as the row's value type. For "is one of" lists each suggestion
+ * is the text typed so far up to the last comma plus one more value (quoted when needed), leaving out values already in the list.
+ */
+export function valueOptions(condition: Condition, draft: string, values: readonly SuggestedValue[]): string[] {
+  const texts = [...new Set(values.filter((value) => valueTypeFor([value.type]) === condition.type).map((value) => value.text))];
+  if (condition.op !== "in" && condition.op !== "nin") {
+    return texts;
+  }
+  const comma = draft.lastIndexOf(",");
+  const prefix = comma < 0 ? "" : `${draft.slice(0, comma + 1)} `;
+  const chosen = new Set(comma < 0 ? [] : splitList(draft.slice(0, comma)));
+  return texts.filter((text) => !chosen.has(text)).map((text) => prefix + listItem(text));
+}
+
+function listItem(text: string): string {
+  return /[,"]/.test(text) || text !== text.trim() ? `"${text.replace(/[\\"]/g, (c) => `\\${c}`)}"` : text;
+}
+
+/** Whether a field is worth sorting by: not when the sample only found embedded documents or arrays (nulls aside). */
+export function isSortable(types: readonly string[]): boolean {
+  const real = types.filter((type) => type !== "null" && type !== "missing");
+  return real.length === 0 || real.some((type) => type !== "object" && type !== "array");
 }

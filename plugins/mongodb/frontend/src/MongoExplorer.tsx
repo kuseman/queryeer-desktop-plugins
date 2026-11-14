@@ -9,7 +9,7 @@ import {
   type CollectionGroups,
   type CollectionInfo
 } from "./collectionGroups.js";
-import { ACTION_COLLECTIONS, ACTION_FIELDS, ACTION_INDEXES, ENGINE_ID, QUERY_BAR_STATE_KEY } from "./constants.js";
+import { ACTION_COLLECTIONS, ACTION_FIELDS, ACTION_INDEXES, ACTION_VALUES, ENGINE_ID, QUERY_BAR_STATE_KEY } from "./constants.js";
 import { commandFor, initialState, textFor, type StoredBar } from "./queryBarModel.js";
 import {
   COLLECTION_ACTIONS,
@@ -27,7 +27,12 @@ import {
 import { isReuseClick, reuseModifierLabel, runGeneratedQuery } from "./queryFiles.js";
 
 export type IndexInfo = { name: string; key: string; unique: boolean };
-export type FieldInfo = { name: string; types: string[]; count: number; sampled: number };
+/** A sampled field. Fields one level down in an embedded document have the full path as `name` and their parent's name as `parent`. */
+export type FieldInfo = { name: string; types: string[]; count: number; sampled: number; parent?: string };
+/** A distinct value of a field, `type` being its `$type` name. */
+export type ValueSuggestion = { type: string; text: string };
+/** A field's values for suggestions; `sampled` is the sample size when they come from a random sample of a large collection. */
+export type FieldValues = { values: ValueSuggestion[]; sampled?: number };
 
 export type Loadable<T> = { status: "loading" } | { status: "loaded"; items: T[] } | { status: "error"; message: string };
 type ClickEvent = { ctrlKey: boolean; metaKey: boolean };
@@ -36,6 +41,8 @@ type ClickEvent = { ctrlKey: boolean; metaKey: boolean };
 const collectionCache = new Map<string, Loadable<CollectionInfo>>();
 const fieldCache = new Map<string, Loadable<FieldInfo>>();
 const indexCache = new Map<string, Loadable<IndexInfo>>();
+/** Distinct values per field. Loaded with an empty list when the field has too many values for suggestions. */
+const valueCache = new Map<string, Loadable<FieldValues>>();
 /**
  * Expanded tree nodes per connection. This store outlives the view, which unmounts whenever a non-MongoDB tab is active,
  * so the tree looks the same when you come back. Like JDBC's navigation store, it is kept in memory and not across restarts.
@@ -52,6 +59,7 @@ export function clearExplorerCache(): void {
   collectionCache.clear();
   fieldCache.clear();
   indexCache.clear();
+  valueCache.clear();
   notify();
 }
 
@@ -70,6 +78,20 @@ export function collectionsOf(context: PluginContext, connectionId: string, data
 export function fieldsOf(context: PluginContext, connectionId: string, database: string, collection: string): Loadable<FieldInfo> {
   const cacheKey = key(connectionId, database, collection);
   return cachedOrLoad(fieldCache, cacheKey, () => load(fieldCache, cacheKey, context, ACTION_FIELDS, { connectionId, database, collection }, false));
+}
+
+/**
+ * A field's distinct values for suggestions, from the cache or loaded (silently) when not cached yet. Fields with more values than
+ * the backend lists, or whose values take too long to collect, load as an empty list.
+ */
+export function valuesOf(context: PluginContext, connectionId: string, database: string, collection: string, field: string): FieldValues {
+  const cacheKey = key(connectionId, database, collection, field);
+  const loadable = cachedOrLoad(valueCache, cacheKey, () =>
+    load(valueCache, cacheKey, context, ACTION_VALUES, { connectionId, database, collection, field }, false, (result) => {
+      const values = result as Partial<FieldValues> | null;
+      return [{ values: values?.values ?? [], sampled: values?.sampled }];
+    }));
+  return loadable.status === "loaded" && loadable.items.length > 0 ? loadable.items[0] : { values: [] };
 }
 
 const pendingLoads = new Set<string>();
@@ -94,6 +116,10 @@ function cachedOrLoad<T>(cache: Map<string, Loadable<T>>, cacheKey: string, star
 
 /** Samples a collection's fields again, e.g. from the query bar's ↻. */
 export function refreshFields(context: PluginContext, connectionId: string, database: string, collection: string): void {
+  const valuesPrefix = key(connectionId, database, collection, "");
+  for (const cacheKey of [...valueCache.keys()].filter((k) => k.startsWith(valuesPrefix))) {
+    valueCache.delete(cacheKey);
+  }
   void load(fieldCache, key(connectionId, database, collection), context, ACTION_FIELDS, { connectionId, database, collection }, true);
 }
 
@@ -117,13 +143,14 @@ async function load<T>(
   context: PluginContext,
   action: string,
   payload: Record<string, unknown>,
-  interactive: boolean
+  interactive: boolean,
+  pick: (result: unknown) => T[] = (result) => (Array.isArray(result) ? (result as T[]) : [])
 ): Promise<void> {
   cache.set(cacheKey, { status: "loading" });
   notify();
   try {
     const result = await context.queryEngines.invoke<unknown>({ engineId: ENGINE_ID, action, payload }, { silent: !interactive });
-    cache.set(cacheKey, { status: "loaded", items: Array.isArray(result) ? (result as T[]) : [] });
+    cache.set(cacheKey, { status: "loaded", items: pick(result) });
   } catch (error) {
     cache.set(cacheKey, { status: "error", message: error instanceof Error ? error.message : String(error) });
   }
@@ -266,6 +293,39 @@ export function MongoExplorer({ context, connectionId, databases }: {
     </button>
   );
 
+  const renderField = (database: string, collection: string, field: FieldInfo, label: string, children: FieldInfo[]): JSX.Element => {
+    const fieldKey = key("field", database, collection, field.name);
+    const childrenKey = key("field-children", database, collection, field.name);
+    const open = children.length > 0 && expandedNodes.has(childrenKey);
+    const presence = formatPresence(field);
+    return (
+      <div key={field.name} role={children.length > 0 ? "treeitem" : undefined} aria-expanded={children.length > 0 ? open : undefined}>
+        <div className={`qmongo-tree-row${children.length > 0 ? "" : " qmongo-tree-leaf-row"}`}
+          title={`${field.name}: ${field.types.join(" | ")}${presence ? ` (in ${presence} of ${field.sampled} sampled documents)` : ""}`}>
+          {children.length > 0 && toggleButton(childrenKey, open, field.name)}
+          <span className="qmongo-tree-label">{label}</span>
+          <span className="qmongo-tree-type">{field.types.join(" | ")}</span>
+          {presence && <span className="qmongo-tree-count">{presence}</span>}
+          <button type="button" className="qmongo-tree-action" title="Actions" aria-expanded={menuFor === fieldKey}
+            onClick={() => setMenuFor(menuFor === fieldKey ? undefined : fieldKey)}>⋯</button>
+        </div>
+        {menuFor === fieldKey && (
+          <div className="qmongo-tree-menu" role="menu">
+            <button type="button" role="menuitem" className="qmongo-tree-menu-item" title={`Distinct values of ${field.name}\n${reuseHint}`}
+              onClick={(e) => runQuery(database, distinctTitle(collection, field.name), distinctCommand(collection, field.name), e)}>
+              Distinct values
+            </button>
+          </div>
+        )}
+        {open && (
+          <div className="qmongo-tree-children" role="group">
+            {children.map((child) => renderField(database, collection, child, child.name.slice(field.name.length + 1), []))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderFields = (database: string, collection: string): JSX.Element => {
     const fieldsKey = key("fields", database, collection);
     const open = expandedNodes.has(fieldsKey);
@@ -280,30 +340,8 @@ export function MongoExplorer({ context, connectionId, databases }: {
         {open && (
           <div className="qmongo-tree-children" role="group">
             {renderStatus(fields, "No fields in the sample")}
-            {fields?.status === "loaded" && fields.items.map((field) => {
-              const fieldKey = key("field", database, collection, field.name);
-              const presence = formatPresence(field);
-              return (
-                <div key={field.name}>
-                  <div className="qmongo-tree-row qmongo-tree-leaf-row"
-                    title={`${field.name}: ${field.types.join(" | ")}${presence ? ` (in ${presence} of ${field.sampled} sampled documents)` : ""}`}>
-                    <span className="qmongo-tree-label">{field.name}</span>
-                    <span className="qmongo-tree-type">{field.types.join(" | ")}</span>
-                    {presence && <span className="qmongo-tree-count">{presence}</span>}
-                    <button type="button" className="qmongo-tree-action" title="Actions" aria-expanded={menuFor === fieldKey}
-                      onClick={() => setMenuFor(menuFor === fieldKey ? undefined : fieldKey)}>⋯</button>
-                  </div>
-                  {menuFor === fieldKey && (
-                    <div className="qmongo-tree-menu" role="menu">
-                      <button type="button" role="menuitem" className="qmongo-tree-menu-item" title={`Distinct values of ${field.name}\n${reuseHint}`}
-                        onClick={(e) => runQuery(database, distinctTitle(collection, field.name), distinctCommand(collection, field.name), e)}>
-                        Distinct values
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {fields?.status === "loaded" && fields.items.filter((field) => field.parent === undefined)
+              .map((field) => renderField(database, collection, field, field.name, fields.items.filter((child) => child.parent === field.name)))}
           </div>
         )}
       </div>

@@ -67,6 +67,7 @@
 .qmongo-qb-condition .qmongo-input { min-width: 0; }
 .qmongo-qb-cond-value.is-invalid { border-color: var(--status-error, #d14); }
 .qmongo-qb-cond-error { grid-column: 1 / -1; }
+.qmongo-qb-cond-note { grid-column: 1 / -1; font-size: 11px; }
 .qmongo-qb-pager { display: inline-flex; align-items: center; gap: 4px; }
 .qmongo-qb-range { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
 

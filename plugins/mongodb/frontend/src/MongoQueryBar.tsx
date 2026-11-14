@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import type { PluginContext } from "@queryeer/api/plugin/Plugin";
 import type { EditorHandle } from "@queryeer/api/editor/EditorCapability";
@@ -6,18 +6,21 @@ import { readSelectedDatabase, resolveConnection } from "./binding.js";
 import { parseConnections } from "./connections.js";
 import { CONNECTIONS_SETTING_ID, DATABASE_STATE_KEY, QUERY_BAR_STATE_KEY } from "./constants.js";
 import { badgeFor, describeEntry, groupCollections } from "./collectionGroups.js";
-import { collectionsOf, fieldsOf, formatCount, refreshFields, subscribeExplorer, type FieldInfo } from "./MongoExplorer.js";
+import { collectionsOf, fieldsOf, formatCount, refreshFields, subscribeExplorer, valuesOf, type FieldInfo, type FieldValues } from "./MongoExplorer.js";
 import {
   LIMIT_CHOICES,
   OPERATOR_LABELS,
-  VALUE_TYPES,
+  CHOOSABLE_VALUE_TYPES,
   VALUE_TYPE_LABELS,
   addSortKey,
   clauseFor,
   filterSummary,
+  isSortable,
   newCondition,
   operatorsFor,
+  suggestsValues,
   takesValue,
+  valueOptions,
   valueTypeFor,
   withFilter,
   withValueType,
@@ -433,6 +436,7 @@ function FieldsPopover(props: BuilderProps): JSX.Element {
   // Fields chosen earlier but missing from this sample stay listed, so they can be unchecked
   const names = [...new Set([...fields.map((field) => field.name), ...state.projection.fields])];
   const typesOf = new Map(fields.map((field) => [field.name, field.types.join(" | ")]));
+  const parentOf = new Map(fields.map((field) => [field.name, field.parent]));
   const visible = names.filter((name) => name.toLowerCase().includes(search.trim().toLowerCase()));
 
   return (
@@ -458,7 +462,7 @@ function FieldsPopover(props: BuilderProps): JSX.Element {
         {visible.map((name) => (
           <label key={name} className="qmongo-qb-item">
             <input type="checkbox" checked={chosen.has(name)} onChange={() => onChange(toggleProjectionField(state, name))} />
-            <span className="qmongo-qb-item-name">{name}</span>
+            <span className="qmongo-qb-item-name" title={name}><FieldName name={name} parent={parentOf.get(name)} /></span>
             <span className="qmongo-tree-type">{typesOf.get(name) ?? "not in sample"}</span>
           </label>
         ))}
@@ -470,7 +474,9 @@ function FieldsPopover(props: BuilderProps): JSX.Element {
 function SortPopover(props: BuilderProps): JSX.Element {
   const { state, onChange } = props;
   const { fields, status } = useFields(props);
-  const unused = fields.map((field) => field.name).filter((name) => !state.sort.some((key) => key.field === name));
+  // Whole documents and arrays are left out: sorting by them is legal but almost never meant
+  const unused = fields.filter((field) => isSortable(field.types)).map((field) => field.name)
+    .filter((name) => !state.sort.some((key) => key.field === name));
 
   return (
     <div className="qmongo-qb-builder">
@@ -534,6 +540,7 @@ function FilterPopover(props: BuilderProps): JSX.Element {
       {conditions.length === 0 && <div className="qmongo-muted">No conditions: every document matches.</div>}
       {conditions.map((condition, index) => (
         <ConditionRow key={index} index={index} condition={condition} fieldNames={fields.map((field) => field.name)} typesOf={typesOf}
+          values={suggestsValues(condition) ? valuesOf(props.context, props.connectionId, props.database, state.collection, condition.field) : NO_VALUES}
           onChange={(next, run) => replace(index, next, run)}
           onRemove={() => update(conditions.filter((_, i) => i !== index))} />
       ))}
@@ -548,11 +555,13 @@ function FilterPopover(props: BuilderProps): JSX.Element {
   );
 }
 
-function ConditionRow({ index, condition, fieldNames, typesOf, onChange, onRemove }: {
+function ConditionRow({ index, condition, fieldNames, typesOf, values, onChange, onRemove }: {
   index: number;
   condition: Condition;
   fieldNames: string[];
   typesOf: Map<string, string[]>;
+  /** The field's distinct values, empty when there are none to suggest. */
+  values: FieldValues;
   onChange: (condition: Condition, run?: boolean) => void;
   onRemove: () => void;
 }): JSX.Element {
@@ -562,13 +571,25 @@ function ConditionRow({ index, condition, fieldNames, typesOf, onChange, onRemov
   // A path that is not in the sample (e.g. address.city) is typed; "Other field…" switches to typing
   const [typing, setTyping] = useState(false);
   const [fieldDraft, setFieldDraft] = useState(condition.field);
+  // Picking a field sampled only as documents or arrays continues as typing below it ("payload.source."), focused at the end
+  const digInto = useRef<string | undefined>(undefined);
+  const focusFieldInput = useRef(false);
   useEffect(() => {
+    if (digInto.current !== undefined && digInto.current === condition.field) {
+      digInto.current = undefined;
+      focusFieldInput.current = true;
+      setFieldDraft(`${condition.field}.`);
+      setTyping(true);
+      return;
+    }
     setFieldDraft(condition.field);
     setTyping(false);
   }, [condition.field]);
   const customField = typing || (condition.field !== "" && !fieldNames.includes(condition.field));
 
   const label = `Condition ${index + 1}`;
+  const listId = useId();
+  const options = valueOptions(condition, draft, values.values);
   const result = clauseFor({ ...condition, value: draft });
   const error = "error" in result && condition.field !== "" ? result.error : undefined;
   const commitValue = (run: boolean): void => {
@@ -578,8 +599,18 @@ function ConditionRow({ index, condition, fieldNames, typesOf, onChange, onRemov
   };
   const chooseField = (field: string): void => {
     const types = typesOf.get(field);
-    // A sampled field retypes the row; a typed path keeps the type chosen so far
-    onChange(types ? withValueType({ ...condition, field }, valueTypeFor(types)) : { ...condition, field });
+    // A sampled field retypes the row; a typed path keeps the type chosen so far, except "document", which a path below a document is not
+    onChange(types ? withValueType({ ...condition, field }, valueTypeFor(types))
+      : condition.type === "document" ? { ...withValueType({ ...condition, field }, "string"), op: "eq" } : { ...condition, field });
+  };
+  /** Applies the typed path. A path ending in "." (nothing typed below the parent) means the parent; nothing typed goes back to the list. */
+  const commitFieldDraft = (): void => {
+    const typed = fieldDraft.trim().replace(/\.+$/, "");
+    if (typed !== condition.field) {
+      chooseField(typed);
+    } else if (typed === "" || fieldNames.includes(typed)) {
+      setTyping(false);
+    }
   };
   const sampledTypes = typesOf.get(condition.field);
 
@@ -588,12 +619,19 @@ function ConditionRow({ index, condition, fieldNames, typesOf, onChange, onRemov
       {customField ? (
         <input className="qmongo-input qmongo-qb-cond-field" aria-label={`${label} field`} placeholder="field.path" value={fieldDraft} spellCheck={false}
           autoFocus={condition.field === ""}
+          ref={(input) => {
+            if (input && focusFieldInput.current) {
+              focusFieldInput.current = false;
+              input.focus();
+              input.setSelectionRange(input.value.length, input.value.length);
+            }
+          }}
           onChange={(e) => setFieldDraft(e.target.value)}
-          onBlur={() => fieldDraft.trim() !== condition.field && chooseField(fieldDraft.trim())}
+          onBlur={commitFieldDraft}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              chooseField(fieldDraft.trim());
+              commitFieldDraft();
             }
           }} />
       ) : (
@@ -601,9 +639,15 @@ function ConditionRow({ index, condition, fieldNames, typesOf, onChange, onRemov
           title={sampledTypes ? `${condition.field}: ${sampledTypes.join(" | ")}` : undefined}
           onChange={(e) => {
             if (e.target.value === OTHER_FIELD) {
+              // Below the current field when it holds documents or arrays (choosing it again in the list fires no change)
+              const types = typesOf.get(condition.field);
+              const below = types && !isSortable(types) ? `${condition.field}.` : "";
+              focusFieldInput.current = below !== "";
               setTyping(true);
-              setFieldDraft("");
+              setFieldDraft(below);
             } else {
+              const types = typesOf.get(e.target.value);
+              digInto.current = types && !isSortable(types) ? e.target.value : undefined;
               chooseField(e.target.value);
             }
           }}>
@@ -621,7 +665,7 @@ function ConditionRow({ index, condition, fieldNames, typesOf, onChange, onRemov
           <select className="qmongo-input qmongo-qb-cond-type" aria-label={`${label} value type`} value={condition.type}
             title="How the value is read"
             onChange={(e) => onChange(withValueType({ ...condition, value: draft }, e.target.value as Condition["type"]))}>
-            {VALUE_TYPES.map((type) => <option key={type} value={type}>{VALUE_TYPE_LABELS[type]}</option>)}
+            {CHOOSABLE_VALUE_TYPES.map((type) => <option key={type} value={type}>{VALUE_TYPE_LABELS[type]}</option>)}
           </select>
           {condition.type === "boolean" ? (
             <select className="qmongo-input qmongo-qb-cond-value" aria-label={`${label} value`} value={condition.value}
@@ -634,8 +678,15 @@ function ConditionRow({ index, condition, fieldNames, typesOf, onChange, onRemov
           ) : (
             <input className={`qmongo-input qmongo-qb-cond-value${error ? " is-invalid" : ""}`} aria-label={`${label} value`}
               aria-invalid={error ? true : undefined} value={draft} spellCheck={false}
-              placeholder={placeholderFor(condition)}
-              onChange={(e) => setDraft(e.target.value)}
+              placeholder={placeholderFor(condition)} list={options.length > 0 ? listId : undefined}
+              title={options.length > 0 ? `${suggestionNote(values)}; type or pick one` : undefined}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                // Picking a suggestion applies it at once, like choosing from a select
+                if ((e.nativeEvent as InputEvent).inputType === "insertReplacementText" && options.includes(e.target.value)) {
+                  onChange({ ...condition, value: e.target.value });
+                }
+              }}
               onBlur={() => commitValue(false)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -646,10 +697,36 @@ function ConditionRow({ index, condition, fieldNames, typesOf, onChange, onRemov
           )}
         </>
       )}
+      {options.length > 0 && (
+        <datalist id={listId} aria-label={`${label} suggested values`}>
+          {options.map((option) => <option key={option} value={option} />)}
+        </datalist>
+      )}
       <button type="button" className="qmongo-button" aria-label={`Remove ${label.toLowerCase()}`} title="Remove" onClick={onRemove}>✕</button>
       {error && <div className="qmongo-error qmongo-qb-cond-error">{error}</div>}
+      {/* Always visible, not only as a tooltip: a sampled list looks complete but may miss values */}
+      {options.length > 0 && values.sampled !== undefined && (
+        <div className="qmongo-muted qmongo-qb-cond-note" role="note">
+          ⚠ Suggestions come from a random sample of {values.sampled.toLocaleString("en-US")} documents. Other values may exist.
+        </div>
+      )}
     </div>
   );
+}
+
+const NO_VALUES: FieldValues = { values: [] };
+
+function suggestionNote({ values, sampled }: FieldValues): string {
+  return sampled
+    ? `${values.length} values seen in a random sample of ${sampled.toLocaleString("en-US")} documents (others may exist)`
+    : `${values.length} values in this collection`;
+}
+
+/** A field path, with the parent of an embedded field dimmed (`payload.` in `payload.orderId`). */
+function FieldName({ name, parent }: { name: string; parent: string | undefined }): JSX.Element {
+  return parent && name.startsWith(`${parent}.`)
+    ? <><span className="qmongo-muted">{parent}.</span>{name.slice(parent.length + 1)}</>
+    : <>{name}</>;
 }
 
 function placeholderFor(condition: Condition): string {

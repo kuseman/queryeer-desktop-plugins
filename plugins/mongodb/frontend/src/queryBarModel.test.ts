@@ -26,6 +26,11 @@ import {
   sortSummary,
   textFor,
   toggleProjectionField,
+  splitList,
+  CHOOSABLE_VALUE_TYPES,
+  isSortable,
+  suggestsValues,
+  valueOptions,
   withCollection,
   withLimit,
   withProjectionMode
@@ -197,7 +202,10 @@ describe("filter", () => {
     expect(valueTypeFor(["decimal"])).toBe("decimal");
     expect(valueTypeFor(["objectId"])).toBe("objectId");
     expect(valueTypeFor(["bool"])).toBe("boolean");
-    expect(valueTypeFor(["object"])).toBe("string");
+    expect(valueTypeFor(["object"])).toBe("document");
+    expect(valueTypeFor(["null", "object"])).toBe("document");
+    expect(valueTypeFor(["object", "string"])).toBe("string");
+    expect(valueTypeFor(["array"])).toBe("string");
     expect(valueTypeFor([])).toBe("string");
     expect(newCondition("express", ["bool"])).toEqual({ field: "express", op: "eq", type: "boolean", value: "true" });
     expect(withValueType(row("name", "contains", "string", "x"), "number")).toEqual(row("name", "eq", "number", "x"));
@@ -224,5 +232,59 @@ describe("filter", () => {
     expect(filterSummary(filter([row("phone", "missing", "string")]))).toBe("phone is missing");
     expect(filterSummary(filter([row("a", "eq", "number", "1"), row("b", "eq", "number", "2"), row("c", "eq", "number", "x")], "or")))
       .toBe("2 conditions (any)");
+  });
+});
+
+describe("embedded fields and value suggestions", () => {
+  const row = (field: string, op: Condition["op"], type: Condition["type"], value = ""): Condition => ({ field, op, type, value });
+
+  it("only tests a document field for presence, and does not sort by documents or arrays", () => {
+    expect(operatorsFor("document")).toEqual(["exists", "missing"]);
+    expect(newCondition("payload.source", ["object"])).toEqual({ field: "payload.source", op: "exists", type: "document", value: "" });
+    expect(withValueType(row("payload.source", "eq", "string", "x"), "document").op).toBe("exists");
+    expect(withValueType(row("payload.source", "missing", "document"), "string").op).toBe("missing");
+    expect(clauseFor(row("payload.source", "exists", "document"))).toEqual({ clause: { "payload.source": { $exists: true } } });
+    expect(CHOOSABLE_VALUE_TYPES).not.toContain("document");
+    expect(isSortable(["object"])).toBe(false);
+    expect(isSortable(["array", "null"])).toBe(false);
+    expect(isSortable(["object", "string"])).toBe(true);
+    expect(isSortable(["int"])).toBe(true);
+    expect(isSortable([])).toBe(true);
+  });
+
+  it("never projects a field together with its parent", () => {
+    let state = toggleProjectionField(initialState("events"), "payload");
+    state = toggleProjectionField(state, "payload.orderId");
+    expect(state.projection.fields).toEqual(["payload.orderId"]);
+    state = toggleProjectionField(state, "payload.status");
+    expect(state.projection.fields).toEqual(["payload.orderId", "payload.status"]);
+    state = toggleProjectionField(state, "payload");
+    expect(state.projection.fields).toEqual(["payload"]);
+    expect(toggleProjectionField(toggleProjectionField(state, "payloadSize"), "payload").projection.fields).toEqual(["payloadSize"]);
+  });
+
+  it("suggests values only where a short list helps", () => {
+    expect(suggestsValues(row("status", "eq", "string"))).toBe(true);
+    expect(suggestsValues(row("payload.qty", "in", "number"))).toBe(true);
+    expect(suggestsValues(row("status", "contains", "string"))).toBe(false);
+    expect(suggestsValues(row("createdAt", "gt", "date"))).toBe(false);
+    expect(suggestsValues(row("_id", "eq", "string"))).toBe(false);
+    expect(suggestsValues(row("", "eq", "string"))).toBe(false);
+  });
+
+  it("lists values of the row's type, and builds on the list typed so far", () => {
+    const values = [
+      { type: "string", text: "new" },
+      { type: "string", text: "paid" },
+      { type: "string", text: 'a, "b"' },
+      { type: "int", text: "1" },
+      { type: "long", text: "1" },
+      { type: "double", text: "2.5" }
+    ];
+    expect(valueOptions(row("status", "eq", "string"), "", values)).toEqual(["new", "paid", 'a, "b"']);
+    expect(valueOptions(row("qty", "eq", "number"), "", values)).toEqual(["1", "2.5"]);
+    expect(valueOptions(row("status", "in", "string"), "", values)).toEqual(["new", "paid", '"a, \\"b\\""']);
+    expect(valueOptions(row("status", "in", "string"), "new, pa", values)).toEqual(["new, paid", 'new, "a, \\"b\\""']);
+    expect(splitList('new, "a, \\"b\\""')).toEqual(["new", 'a, "b"']);
   });
 });
