@@ -12,8 +12,8 @@ import java.util.Map;
 record MongoConnectionSettings(String connectionId, String title, String hosts, boolean srv, String username, Object password, String authDatabase, boolean tls,
         boolean tlsAllowInvalidCertificates, String defaultDatabase, String options, boolean enabled)
 {
-    static final String MODULE_ID = "com.queryeer.mongodb";
-    static final String CONNECTIONS_SETTING_ID = MODULE_ID + ".connections";
+    static final String MODULE_ID = "com.queryeer.mongodb.connections";
+    static final String CONNECTIONS_SETTING_ID = MODULE_ID + ".list";
     static final String DEFAULT_AUTH_DATABASE = "admin";
 
     /** Parses the raw settings value. Entries without an ID or hosts are skipped; the first entry wins for duplicate IDs. */

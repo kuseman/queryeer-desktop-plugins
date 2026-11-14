@@ -22,7 +22,7 @@ queryeer-desktop-plugins/
     elasticsearch/      (planned)
   shared/
     schema/             vendored copy of Queryeer's plugin.json v1 schema
-    scripts/            packaging, package verification, ZIP writer, Maven runner, smoke tests
+    scripts/            packaging, package verification, ZIP writer, Maven runner, changelog
   dist/                 build output (git-ignored)
   catalog/index.json    verified-plugin catalog read by Queryeer (planned)
   .github/CODEOWNERS    per-plugin ownership (planned)
