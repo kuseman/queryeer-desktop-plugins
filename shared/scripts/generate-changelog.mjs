@@ -5,7 +5,8 @@
 // Only commits that touch plugins/<name> count, so other plugins' changes never show up. Each release tag
 // <name>/v<semver> becomes a section, newest first; commits after the latest tag become a section for plugin.json's
 // version (or "Unreleased" when that version is already tagged). Subjects are grouped by their conventional-commit
-// type. Needs the full history with tags (CI: fetch-depth 0); without git it writes a single placeholder section.
+// type; a subject holding several ("feat: A fix: B") gives one entry per type. Needs the full history with tags
+// (CI: fetch-depth 0); without git it writes a single placeholder section.
 
 import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -53,15 +54,29 @@ function formatSubject(subject) {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
+/**
+ * Splits a subject holding several conventional commits ("feat: A fix(x): B") into one entry per type, like Queryeer Desktop's
+ * generator. A new entry starts only at a space followed by a type, an optional scope and "!", a colon and a space.
+ */
+function splitConventionalCommits(subject) {
+  const parts = subject
+    .split(new RegExp(`\\s(?=(?:${TYPES})(?:\\([^)]*\\))?!?:\\s)`, "i"))
+    .map((part) => part.trim())
+    .filter((part) => part !== "");
+  return parts.length > 1 ? parts : [subject.trim()];
+}
+
 /** Commit subjects in `range` that touch this plugin, grouped by category. */
 function commits(range) {
   const groups = new Map(CATEGORIES.map((title) => [title, []]));
   const log = git(["log", range, "--no-merges", "--pretty=format:%s", "--", pluginPath]) ?? "";
   for (const subject of log.split(/\r?\n/).filter(Boolean)) {
-    if (/^release(\(.+?\))?:|^chore(\(.+?\))?: prepare for next development iteration/i.test(subject)) {
-      continue;
+    for (const entry of splitConventionalCommits(subject)) {
+      if (/^release(\(.+?\))?:|^chore(\(.+?\))?: prepare for next development iteration/i.test(entry)) {
+        continue;
+      }
+      groups.get(categorize(entry)).push(formatSubject(entry));
     }
-    groups.get(categorize(subject)).push(formatSubject(subject));
   }
   return groups;
 }
