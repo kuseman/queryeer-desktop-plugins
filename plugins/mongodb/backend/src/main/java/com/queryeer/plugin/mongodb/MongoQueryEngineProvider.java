@@ -44,8 +44,19 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     static final String ACTION_COLLECTIONS = "mongodb.collections";
     static final String ACTION_INDEXES = "mongodb.indexes";
     static final String ACTION_FIELDS = "mongodb.fields";
+    static final String ACTION_VALUES = "mongodb.values";
+    /** A field with more distinct values than this gets no suggestions. */
+    static final int VALUE_SUGGESTION_LIMIT = 50;
+    static final long VALUE_SUGGESTION_MAX_TIME_MS = 2_000;
+    /** Collections larger than this get suggestions from a random sample: a full scan rarely finishes within the time limit. */
+    static final long VALUE_SUGGESTION_EXACT_MAX_DOCUMENTS = 100_000;
+    static final int VALUE_SUGGESTION_SAMPLE_SIZE = 1_000;
     static final int FIELD_SAMPLE_SIZE = 1000;
     static final long FIELD_SAMPLE_MAX_TIME_MS = 10_000;
+    /** At most this many fields one level down per embedded document, so map-like documents (IDs or dates as keys) do not flood the lists. */
+    static final int FIELD_SAMPLE_MAX_CHILDREN = 200;
+    /** Upper bound on distinct (parent, key) groups the sample returns, keeping the $facet output well under 16 MB. */
+    static final int FIELD_SAMPLE_MAX_NESTED = 5_000;
     static final String STATE_CONNECTION_ID = "connectionId";
     static final String STATE_DATABASE = "database";
 
@@ -202,6 +213,8 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
             case ACTION_COLLECTIONS -> listCollections(client, requiredText(map, "database"));
             case ACTION_INDEXES -> listIndexes(client, requiredText(map, "database"), requiredText(map, "collection"));
             case ACTION_FIELDS -> sampleFields(client, requiredText(map, "database"), requiredText(map, "collection"));
+            case ACTION_VALUES -> distinctValues(client, requiredText(map, "database"), requiredText(map, "collection"), requiredText(map, "field"),
+                    VALUE_SUGGESTION_EXACT_MAX_DOCUMENTS);
             case ACTION_PING ->
             {
                 BsonDocument buildInfo = client.getDatabase("admin")
@@ -343,8 +356,11 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     }
 
     /**
-     * Top-level fields of a collection or view, inferred from a random sample (MongoDB has no declared schema):
-     * {@code { name, types, count, sampled }}, most common first. The server stops the sampling after {@value #FIELD_SAMPLE_MAX_TIME_MS} ms.
+     * Fields of a collection or view, inferred from a random sample (MongoDB has no declared schema):
+     * {@code { name, types, count, sampled }} for top-level fields, _id first and then most common. Each field that holds an embedded
+     * document is followed by its own fields one level down ({@code payload.orderId}), with {@code parent} set and at most
+     * {@value #FIELD_SAMPLE_MAX_CHILDREN} per parent. Keys that dot notation cannot address (containing '.' or starting with '$') are left out
+     * one level down. The server stops the sampling after {@value #FIELD_SAMPLE_MAX_TIME_MS} ms.
      */
     private static List<Map<String, Object>> sampleFields(MongoClient client, String database, String collection)
     {
@@ -355,9 +371,19 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
                         { "$project": { "kv": { "$objectToArray": "$$ROOT" } } },
                         { "$unwind": "$kv" },
                         { "$group": { "_id": "$kv.k", "count": { "$sum": 1 }, "types": { "$addToSet": { "$type": "$kv.v" } } } }
+                    ],
+                    "nested": [
+                        { "$project": { "kv": { "$objectToArray": "$$ROOT" } } },
+                        { "$unwind": "$kv" },
+                        { "$match": { "$expr": { "$eq": [ { "$type": "$kv.v" }, "object" ] } } },
+                        { "$project": { "parent": "$kv.k", "sub": { "$objectToArray": "$kv.v" } } },
+                        { "$unwind": "$sub" },
+                        { "$group": { "_id": { "parent": "$parent", "key": "$sub.k" }, "count": { "$sum": 1 }, "types": { "$addToSet": { "$type": "$sub.v" } } } },
+                        { "$sort": { "count": -1 } },
+                        { "$limit": %d }
                     ]
                 } }
-                """));
+                """.formatted(FIELD_SAMPLE_MAX_NESTED)));
         BsonDocument facet = client.getDatabase(database)
                 .getCollection(collection, BsonDocument.class)
                 .aggregate(pipeline)
@@ -376,31 +402,237 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
                         .get("n")
                         .asNumber()
                         .longValue();
+        List<Map<String, Object>> topLevel = new ArrayList<>();
         for (BsonValue value : facet.getArray("fields", new BsonArray()))
         {
             BsonDocument field = value.asDocument();
-            List<String> types = new ArrayList<>();
-            for (BsonValue type : field.getArray("types", new BsonArray()))
+            topLevel.add(sampledField(field.getString("_id")
+                    .getValue(), null, field, sampled));
+        }
+        Map<String, List<Map<String, Object>>> children = new LinkedHashMap<>();
+        for (BsonValue value : facet.getArray("nested", new BsonArray()))
+        {
+            BsonDocument field = value.asDocument();
+            BsonDocument id = field.getDocument("_id");
+            String parent = id.getString("parent")
+                    .getValue();
+            String key = id.getString("key")
+                    .getValue();
+            if (key.isEmpty()
+                    || key.contains(".")
+                    || key.startsWith("$"))
             {
-                types.add(type.asString()
-                        .getValue());
+                continue;
             }
-            types.sort(Comparator.naturalOrder());
-            Map<String, Object> entry = new LinkedHashMap<>();
-            entry.put("name", field.getString("_id")
-                    .getValue());
-            entry.put("types", types);
-            entry.put("count", field.get("count")
-                    .asNumber()
-                    .longValue());
-            entry.put("sampled", sampled);
-            result.add(entry);
+            children.computeIfAbsent(parent, k -> new ArrayList<>())
+                    .add(sampledField(parent + "." + key, parent, field, sampled));
         }
         // _id first, then most common, then by name
-        result.sort(Comparator.<Map<String, Object>, Boolean> comparing(entry -> !"_id".equals(entry.get("name")))
-                .thenComparing(entry -> -((Long) entry.get("count")))
-                .thenComparing(entry -> ((String) entry.get("name")).toLowerCase(Locale.ROOT)));
+        topLevel.sort(Comparator.<Map<String, Object>, Boolean> comparing(entry -> !"_id".equals(entry.get("name")))
+                .thenComparing(FIELD_ORDER));
+        for (Map<String, Object> entry : topLevel)
+        {
+            result.add(entry);
+            List<Map<String, Object>> nested = children.getOrDefault(entry.get("name"), List.of());
+            result.addAll(nested.stream()
+                    .sorted(FIELD_ORDER)
+                    .limit(FIELD_SAMPLE_MAX_CHILDREN)
+                    .toList());
+        }
         return result;
+    }
+
+    /** Most common first, then by name. */
+    private static final Comparator<Map<String, Object>> FIELD_ORDER = Comparator.<Map<String, Object>, Long> comparing(entry -> -((Long) entry.get("count")))
+            .thenComparing(entry -> ((String) entry.get("name")).toLowerCase(Locale.ROOT));
+
+    private static Map<String, Object> sampledField(String name, String parent, BsonDocument group, long sampled)
+    {
+        List<String> types = new ArrayList<>();
+        for (BsonValue type : group.getArray("types", new BsonArray()))
+        {
+            types.add(type.asString()
+                    .getValue());
+        }
+        types.sort(Comparator.naturalOrder());
+        Map<String, Object> entry = new LinkedHashMap<>();
+        entry.put("name", name);
+        if (parent != null)
+        {
+            entry.put("parent", parent);
+        }
+        entry.put("types", types);
+        entry.put("count", group.get("count")
+                .asNumber()
+                .longValue());
+        entry.put("sampled", sampled);
+        return entry;
+    }
+
+    /**
+     * Value suggestions for the query bar's filter: the distinct values of a field (array elements counted one by one, like {@code distinct}) as
+     * {@code { values: [{ type, text }], complete, sampled? }}. Collections over {@code exactMaxDocuments} documents are read through a random
+     * sample of {@value #VALUE_SUGGESTION_SAMPLE_SIZE} documents, given as {@code sampled}, so rare values may be missing; views and
+     * time-series collections are always read in full, since sampling them still runs their whole pipeline. {@code complete} is false, and
+     * the list empty, when there are more than {@value #VALUE_SUGGESTION_LIMIT} values or the server gives up after
+     * {@value #VALUE_SUGGESTION_MAX_TIME_MS} ms. Only values the filter can type in are listed (text, numbers, dates, ObjectIds, booleans),
+     * sorted by type and then by value.
+     */
+    static Map<String, Object> distinctValues(MongoClient client, String database, String collection, String field, long exactMaxDocuments)
+    {
+        if (field.startsWith("$"))
+        {
+            throw new IllegalArgumentException("Not a field path: " + field);
+        }
+        MongoDatabase db = client.getDatabase(database);
+        BsonDocument info = db.listCollections(BsonDocument.class)
+                .filter(new BsonDocument("name", new BsonString(collection)))
+                .first();
+        boolean plainCollection = info != null
+                && "collection".equals(info.getString("type", new BsonString("collection"))
+                        .getValue());
+        boolean sample = plainCollection
+                && db.getCollection(collection)
+                        .estimatedDocumentCount() > exactMaxDocuments;
+        BsonString path = new BsonString("$" + field);
+        List<BsonDocument> pipeline = new ArrayList<>();
+        if (sample)
+        {
+            pipeline.add(new BsonDocument("$sample", new BsonDocument("size", new BsonInt32(VALUE_SUGGESTION_SAMPLE_SIZE))));
+        }
+        pipeline.add(new BsonDocument("$unwind", path));
+        pipeline.add(new BsonDocument("$group", new BsonDocument("_id", path)));
+        pipeline.add(new BsonDocument("$limit", new BsonInt32(VALUE_SUGGESTION_LIMIT + 1)));
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (sample)
+        {
+            result.put("sampled", VALUE_SUGGESTION_SAMPLE_SIZE);
+        }
+        List<BsonDocument> groups;
+        try
+        {
+            groups = client.getDatabase(database)
+                    .getCollection(collection, BsonDocument.class)
+                    .aggregate(pipeline)
+                    .maxTime(VALUE_SUGGESTION_MAX_TIME_MS, TimeUnit.MILLISECONDS)
+                    .into(new ArrayList<>());
+        }
+        catch (MongoExecutionTimeoutException e)
+        {
+            result.put("values", List.of());
+            result.put("complete", false);
+            return result;
+        }
+        boolean complete = groups.size() <= VALUE_SUGGESTION_LIMIT;
+        List<Map<String, Object>> values = new ArrayList<>();
+        if (complete)
+        {
+            for (BsonDocument group : groups)
+            {
+                Map<String, Object> value = suggestion(group.get("_id"));
+                if (value != null)
+                {
+                    values.add(value);
+                }
+            }
+            values.sort(Comparator.<Map<String, Object>, String> comparing(v -> (String) v.get("type"))
+                    .thenComparing(MongoQueryEngineProvider::compareSuggestionText));
+        }
+        result.put("values", values);
+        result.put("complete", complete);
+        return result;
+    }
+
+    /** {@code { type, text }} with {@code type} a {@code $type} name, or null for values the filter cannot type in. */
+    private static Map<String, Object> suggestion(BsonValue value)
+    {
+        String type;
+        String text;
+        switch (value.getBsonType())
+        {
+            case STRING ->
+            {
+                type = "string";
+                text = value.asString()
+                        .getValue();
+            }
+            case INT32 ->
+            {
+                type = "int";
+                text = Integer.toString(value.asInt32()
+                        .getValue());
+            }
+            case INT64 ->
+            {
+                type = "long";
+                text = Long.toString(value.asInt64()
+                        .getValue());
+            }
+            case DOUBLE ->
+            {
+                type = "double";
+                double d = value.asDouble()
+                        .getValue();
+                if (!Double.isFinite(d))
+                {
+                    return null;
+                }
+                text = d == Math.rint(d)
+                        && Math.abs(d) < 1e15 ? Long.toString((long) d)
+                                : Double.toString(d);
+            }
+            case DECIMAL128 ->
+            {
+                type = "decimal";
+                text = value.asDecimal128()
+                        .getValue()
+                        .toString();
+            }
+            case DATE_TIME ->
+            {
+                type = "date";
+                text = java.time.Instant.ofEpochMilli(value.asDateTime()
+                        .getValue())
+                        .toString();
+            }
+            case OBJECT_ID ->
+            {
+                type = "objectId";
+                text = value.asObjectId()
+                        .getValue()
+                        .toHexString();
+            }
+            case BOOLEAN ->
+            {
+                type = "bool";
+                text = Boolean.toString(value.asBoolean()
+                        .getValue());
+            }
+            default ->
+            {
+                return null;
+            }
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("type", type);
+        result.put("text", text);
+        return result;
+    }
+
+    /** Numbers in numeric order, everything else by text. */
+    private static int compareSuggestionText(Map<String, Object> a, Map<String, Object> b)
+    {
+        String x = (String) a.get("text");
+        String y = (String) b.get("text");
+        if (switch ((String) a.get("type"))
+        {
+            case "int", "long", "double", "decimal" -> true;
+            default -> false;
+        })
+        {
+            return new java.math.BigDecimal(x).compareTo(new java.math.BigDecimal(y));
+        }
+        return x.compareTo(y);
     }
 
     private static String requiredText(Map<?, ?> payload, String key)

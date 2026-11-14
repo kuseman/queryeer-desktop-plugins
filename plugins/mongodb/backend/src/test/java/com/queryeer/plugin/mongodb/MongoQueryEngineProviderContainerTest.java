@@ -27,6 +27,7 @@ import org.testcontainers.utility.DockerImageName;
 
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
+import com.mongodb.client.MongoCollection;
 import com.mongodb.client.model.CreateCollectionOptions;
 import com.mongodb.client.model.TimeSeriesOptions;
 import com.mongodb.client.model.ValidationAction;
@@ -490,9 +491,13 @@ class MongoQueryEngineProviderContainerTest
                 .get("name"), "_id comes first");
         Map<String, Map<String, Object>> byName = new HashMap<>();
         fields.forEach(f -> byName.put((String) f.get("name"), f));
-        assertEquals(List.of("_id", "status", "total", "customer", "note", "tags"), fields.stream()
+        assertEquals(List.of("_id", "status", "total", "customer", "customer.name", "note", "tags"), fields.stream()
                 .map(f -> f.get("name"))
-                .toList(), "_id, then most common, then by name");
+                .toList(), "_id, then most common, then by name; embedded fields follow their parent");
+        assertEquals("customer", byName.get("customer.name")
+                .get("parent"));
+        assertEquals(2L, byName.get("customer.name")
+                .get("count"));
         assertEquals(5L, byName.get("status")
                 .get("count"));
         assertEquals(5L, byName.get("status")
@@ -505,6 +510,91 @@ class MongoQueryEngineProviderContainerTest
                 .get("types"));
         assertEquals(List.of("array"), byName.get("tags")
                 .get("types"));
+    }
+
+    @Test
+    void invokeSamplesFieldsOneLevelDown()
+    {
+        MongoCollection<Document> events = seedClient.getDatabase("shop")
+                .getCollection("kafka_events");
+        events.insertMany(List.of(Document.parse("{ \"payload\": { \"orderId\": 1, \"status\": \"new\", \"meta\": { \"deep\": 1 }, \"a.b\": 1, \"$odd\": 1 } }"),
+                Document.parse("{ \"payload\": { \"orderId\": 2, \"lines\": [] } }"), Document.parse("{ \"payload\": \"not a document\" }"),
+                Document.parse("{ \"items\": [ { \"sku\": \"x\" } ] }")));
+        try
+        {
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> fields = (List<Map<String, Object>>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_FIELDS, Map.of("connectionId",
+                    "local", "database", "shop", "collection", "kafka_events"));
+
+            assertEquals(List.of("_id", "payload", "payload.orderId", "payload.lines", "payload.meta", "payload.status", "items"), fields.stream()
+                    .map(f -> f.get("name"))
+                    .toList(), "one level down only, no keys dot notation cannot address, nothing inside arrays");
+            Map<String, Object> orderId = fields.get(2);
+            assertEquals(List.of("int"), orderId.get("types"));
+            assertEquals(2L, orderId.get("count"));
+            assertEquals(4L, orderId.get("sampled"));
+            assertEquals(List.of("object", "string"), fields.get(1)
+                    .get("types"));
+        }
+        finally
+        {
+            events.drop();
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void invokeListsDistinctValuesForSuggestions()
+    {
+        Map<String, Object> status = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database",
+                "shop", "collection", "orders", "field", "status"));
+        assertEquals(true, status.get("complete"));
+        assertEquals(List.of(Map.of("type", "string", "text", "closed"), Map.of("type", "string", "text", "open")), status.get("values"));
+        assertNull(status.get("sampled"), "small collections are read in full");
+
+        Map<String, Object> sampled = MongoQueryEngineProvider.distinctValues(seedClient, "shop", "orders", "status", 2);
+        assertEquals(MongoQueryEngineProvider.VALUE_SUGGESTION_SAMPLE_SIZE, sampled.get("sampled"), "larger collections are sampled");
+        assertEquals(status.get("values"), sampled.get("values"));
+
+        Map<String, Object> totals = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database",
+                "shop", "collection", "orders", "field", "total"));
+        assertEquals(List.of("10", "20", "30", "40", "50"), ((List<Map<String, Object>>) totals.get("values")).stream()
+                .map(v -> v.get("text"))
+                .toList(), "numbers in numeric order");
+
+        Map<String, Object> tags = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database",
+                "shop", "collection", "orders", "field", "tags"));
+        assertEquals(List.of(Map.of("type", "string", "text", "x")), tags.get("values"), "array elements one by one");
+
+        Map<String, Object> nested = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database",
+                "shop", "collection", "orders", "field", "customer.name"));
+        assertEquals(List.of(Map.of("type", "string", "text", "A"), Map.of("type", "string", "text", "B")), nested.get("values"));
+
+        Map<String, Object> documents = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database",
+                "shop", "collection", "orders", "field", "customer"));
+        assertEquals(List.of(), documents.get("values"), "embedded documents cannot be typed into a filter");
+
+        MongoCollection<Document> many = seedClient.getDatabase("shop")
+                .getCollection("many_values");
+        List<Document> documentsWithManyValues = new java.util.ArrayList<>();
+        for (int i = 0; i <= MongoQueryEngineProvider.VALUE_SUGGESTION_LIMIT; i++)
+        {
+            documentsWithManyValues.add(new Document("n", i));
+        }
+        many.insertMany(documentsWithManyValues);
+        try
+        {
+            Map<String, Object> tooMany = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local",
+                    "database", "shop", "collection", "many_values", "field", "n"));
+            assertEquals(false, tooMany.get("complete"));
+            assertEquals(List.of(), tooMany.get("values"));
+        }
+        finally
+        {
+            many.drop();
+        }
+        assertThrows(IllegalArgumentException.class, () -> provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local",
+                "database", "shop", "collection", "orders", "field", "$where")));
     }
 
     @Test

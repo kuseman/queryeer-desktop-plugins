@@ -53,9 +53,18 @@ Redesigned 2026-11-13. Plain Filter/Projection/Sort text fields duplicated the e
   - Operators per type: = ≠ > ≥ < ≤, is one of / is none of (comma-separated; quotes keep a comma), contains (ignores case), starts with, matches regex, exists, is missing
   - AND stays one flat document, with ranges on one field merged (`{ total: { $gte: 10, $lt: 20 } }`), falling back to `$and`. Invalid rows stay in the bar, marked, and are left out of the query.
   - "Other field…" takes a typed path such as `address.city`
+  - Picking a field sampled only as documents or arrays continues as typing below it (`payload.source.`), focused, so deeper paths can be written; leaving without typing more keeps the field and returns to the list. "Other field…" on such a field starts below it too.
   - Value text applies on blur or Enter, not per keystroke, so the editor's undo history stays usable. Enter also runs.
-- [ ] Value suggestions for low-cardinality fields (capped `distinct`) (next)
-- [ ] Nested fields (`address.city`): sampling returns top-level fields only today
+- [x] Embedded fields one level down (`payload.orderId`, `address.city`) in the field sample, in the same aggregation
+  - Shown under their parent in the explorer, and with the parent dimmed in the query bar's lists
+  - At most 200 per parent, so map-like documents (IDs or dates as keys) do not flood the lists. Keys that dot notation cannot address (with `.` or a leading `$`) are left out.
+  - Checking a field in Fields unchecks its parent or its own fields, since MongoDB rejects both in one projection (path collision)
+  - A field sampled only as embedded documents (at any level, e.g. `payload` or `payload.source`) offers only exists / is missing in Filter, and Sort leaves out fields sampled only as documents or arrays. Fields and the explorer list everything. Arrays stay in Filter, since `{ "tags": "a" }` matches any element.
+- [x] Value suggestions in filter rows (text and number fields; comparisons and is one of / is none of)
+  - A list under the value input when the field has at most 50 distinct values. For lists, each suggestion adds one more value to what is typed.
+  - Collections up to 100,000 documents are read in full ($group, 2 s limit). Larger ones read a random sample of 1,000 documents, because a full scan rarely finishes in time; the row then says so in visible text ("Other values may exist"). Views and time-series collections are always read in full.
+  - Not for `_id`, dates, ObjectIds, or contains / starts with / regex
+- [ ] Later, maybe: embedded fields inside arrays (`items.sku`) and more than one level down
 - [ ] Later, maybe: read hand-written finds back into the bar (needs a value parser)
 - [x] Verified in Queryeer (2026-11-14): query bar and collection combobox
 
