@@ -49,7 +49,39 @@
     </dependencies>
 
     <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.build.directory}/generated-resources/changelog</directory>
+            </resource>
+        </resources>
         <plugins>
+            <plugin>
+                <!-- Generates the plugin's changelog from git history; registered with the host so it shows in About -->
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>generate-changelog</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>node</executable>
+                            <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
+                            <arguments>
+                                <argument>shared/scripts/generate-changelog.mjs</argument>
+                                <argument>plugins/mongodb</argument>
+                                <argument>${project.build.directory}/generated-resources/changelog/com/queryeer/plugin/mongodb/CHANGELOG.md</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <!-- Runtime dependencies end up in target/lib and are packaged into the plugin ZIP's lib/ -->
                 <groupId>org.apache.maven.plugins</groupId>

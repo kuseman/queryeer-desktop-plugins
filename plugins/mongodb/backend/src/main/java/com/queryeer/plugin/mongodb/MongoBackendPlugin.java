@@ -1,5 +1,10 @@
 package com.queryeer.plugin.mongodb;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+
 import com.queryeer.backend.api.BackendPlugin;
 import com.queryeer.backend.api.BackendPluginContext;
 import com.queryeer.backend.api.LargeValueStore;
@@ -31,8 +36,28 @@ public final class MongoBackendPlugin implements BackendPlugin
                 .register(fileConnections);
         context.queryEngines()
                 .register(provider);
+        String changelog = changelog();
+        if (changelog != null)
+        {
+            context.changelogs()
+                    .registerChangelog(descriptor.id(), changelog);
+        }
         context.logger()
                 .info("MongoDB plugin " + descriptor.version() + " activated");
+    }
+
+    /** The plugin's CHANGELOG.md, generated from git history by the build (pom.xml), or null when it is missing. */
+    static String changelog()
+    {
+        try (InputStream stream = MongoBackendPlugin.class.getResourceAsStream("CHANGELOG.md"))
+        {
+            return stream != null ? new String(stream.readAllBytes(), StandardCharsets.UTF_8)
+                    : null;
+        }
+        catch (IOException e)
+        {
+            throw new UncheckedIOException(e);
+        }
     }
 
     @Override
