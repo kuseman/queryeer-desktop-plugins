@@ -1,0 +1,76 @@
+{
+  "explainVersion": "1",
+  "stages": [
+    {
+      "$cursor": {
+        "queryPlanner": {
+          "namespace": "qmongo_showcase.customers",
+          "indexFilterSet": false,
+          "parsedQuery": {
+            "tier": {
+              "$eq": "gold"
+            }
+          },
+          "queryHash": "024C2338",
+          "planCacheKey": "E4D44FE7",
+          "optimizationTimeMillis": 0,
+          "maxIndexedOrSolutionsReached": false,
+          "maxIndexedAndSolutionsReached": false,
+          "maxScansToExplodeReached": false,
+          "winningPlan": {
+            "stage": "COLLSCAN",
+            "filter": {
+              "tier": {
+                "$eq": "gold"
+              }
+            },
+            "direction": "forward"
+          },
+          "rejectedPlans": []
+        },
+        "executionStats": {
+          "executionSuccess": true,
+          "nReturned": 85,
+          "executionTimeMillis": 2,
+          "totalKeysExamined": 0,
+          "totalDocsExamined": 400,
+          "executionStages": {
+            "stage": "COLLSCAN",
+            "filter": {
+              "tier": {
+                "$eq": "gold"
+              }
+            },
+            "nReturned": 85,
+            "executionTimeMillisEstimate": 0,
+            "works": 401,
+            "advanced": 85,
+            "needTime": 315,
+            "needYield": 0,
+            "saveState": 1,
+            "restoreState": 1,
+            "isEOF": 1,
+            "direction": "forward",
+            "docsExamined": 400
+          }
+        }
+      },
+      "nReturned": 85,
+      "executionTimeMillisEstimate": 0
+    },
+    {
+      "$lookup": {
+        "from": "stores",
+        "as": "stores",
+        "localField": "address.city",
+        "foreignField": "city"
+      },
+      "totalDocsExamined": 680,
+      "totalKeysExamined": 0,
+      "collectionScans": 85,
+      "indexesUsed": [],
+      "nReturned": 85,
+      "executionTimeMillisEstimate": 2
+    }
+  ]
+}

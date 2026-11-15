@@ -1,0 +1,163 @@
+{
+  "explainVersion": "1",
+  "stages": [
+    {
+      "$cursor": {
+        "queryPlanner": {
+          "namespace": "qmongo_showcase.orders",
+          "indexFilterSet": false,
+          "parsedQuery": {
+            "status": {
+              "$eq": "paid"
+            }
+          },
+          "queryHash": "7E23066D",
+          "planCacheKey": "9434D8F5",
+          "optimizationTimeMillis": 0,
+          "maxIndexedOrSolutionsReached": false,
+          "maxIndexedAndSolutionsReached": false,
+          "maxScansToExplodeReached": false,
+          "winningPlan": {
+            "stage": "PROJECTION_SIMPLE",
+            "transformBy": {
+              "customerId": 1,
+              "_id": 0
+            },
+            "inputStage": {
+              "stage": "FETCH",
+              "inputStage": {
+                "stage": "IXSCAN",
+                "keyPattern": {
+                  "status": 1
+                },
+                "indexName": "open_status_partial",
+                "isMultiKey": false,
+                "multiKeyPaths": {
+                  "status": []
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": true,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "status": [
+                    "[\"paid\", \"paid\"]"
+                  ]
+                }
+              }
+            }
+          },
+          "rejectedPlans": []
+        },
+        "executionStats": {
+          "executionSuccess": true,
+          "nReturned": 400,
+          "executionTimeMillis": 1,
+          "totalKeysExamined": 400,
+          "totalDocsExamined": 400,
+          "executionStages": {
+            "stage": "PROJECTION_SIMPLE",
+            "nReturned": 400,
+            "executionTimeMillisEstimate": 1,
+            "works": 401,
+            "advanced": 400,
+            "needTime": 0,
+            "needYield": 0,
+            "saveState": 1,
+            "restoreState": 1,
+            "isEOF": 1,
+            "transformBy": {
+              "customerId": 1,
+              "_id": 0
+            },
+            "inputStage": {
+              "stage": "FETCH",
+              "nReturned": 400,
+              "executionTimeMillisEstimate": 1,
+              "works": 401,
+              "advanced": 400,
+              "needTime": 0,
+              "needYield": 0,
+              "saveState": 1,
+              "restoreState": 1,
+              "isEOF": 1,
+              "docsExamined": 400,
+              "alreadyHasObj": 0,
+              "inputStage": {
+                "stage": "IXSCAN",
+                "nReturned": 400,
+                "executionTimeMillisEstimate": 0,
+                "works": 401,
+                "advanced": 400,
+                "needTime": 0,
+                "needYield": 0,
+                "saveState": 1,
+                "restoreState": 1,
+                "isEOF": 1,
+                "keyPattern": {
+                  "status": 1
+                },
+                "indexName": "open_status_partial",
+                "isMultiKey": false,
+                "multiKeyPaths": {
+                  "status": []
+                },
+                "isUnique": false,
+                "isSparse": false,
+                "isPartial": true,
+                "indexVersion": 2,
+                "direction": "forward",
+                "indexBounds": {
+                  "status": [
+                    "[\"paid\", \"paid\"]"
+                  ]
+                },
+                "keysExamined": 400,
+                "seeks": 1,
+                "dupsTested": 0,
+                "dupsDropped": 0
+              }
+            }
+          }
+        }
+      },
+      "nReturned": 400,
+      "executionTimeMillisEstimate": 1
+    },
+    {
+      "$group": {
+        "_id": "$customerId",
+        "n": {
+          "$sum": {
+            "$const": 1
+          }
+        }
+      },
+      "maxAccumulatorMemoryUsageBytes": {
+        "n": 7104
+      },
+      "totalOutputDataSizeBytes": 18130,
+      "usedDisk": false,
+      "spills": 0,
+      "spilledDataStorageSize": 0,
+      "numBytesSpilledEstimate": 0,
+      "spilledRecords": 0,
+      "nReturned": 74,
+      "executionTimeMillisEstimate": 1
+    },
+    {
+      "$sort": {
+        "sortKey": {
+          "n": -1
+        }
+      },
+      "totalDataSizeSortedBytesEstimate": 18722,
+      "usedDisk": false,
+      "spills": 0,
+      "spilledDataStorageSize": 0,
+      "nReturned": 74,
+      "executionTimeMillisEstimate": 1
+    }
+  ]
+}
