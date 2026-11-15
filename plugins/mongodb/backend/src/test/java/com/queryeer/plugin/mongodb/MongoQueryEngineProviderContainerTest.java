@@ -586,6 +586,10 @@ class MongoQueryEngineProviderContainerTest
                 .get("types"));
         assertEquals(List.of("array"), byName.get("tags")
                 .get("types"));
+        assertEquals(List.of("string"), byName.get("tags")
+                .get("elementTypes"), "what a condition on the array compares against");
+        assertFalse(byName.get("status")
+                .containsKey("elementTypes"));
     }
 
     @Test
@@ -611,6 +615,10 @@ class MongoQueryEngineProviderContainerTest
             assertEquals(4L, orderId.get("sampled"));
             assertEquals(List.of("object", "string"), fields.get(1)
                     .get("types"));
+            assertEquals(List.of("object"), fields.get(6)
+                    .get("elementTypes"), "items holds documents");
+            assertFalse(fields.get(3)
+                    .containsKey("elementTypes"), "payload.lines was only sampled empty");
         }
         finally
         {

@@ -302,6 +302,14 @@ export function valueTypeFor(types: readonly string[]): ValueType {
   }
 }
 
+/**
+ * The types a condition on a field compares against. A condition on an array field matches its elements (`categoryIds: 181` finds arrays
+ * holding 181), so arrays count as their sampled element types. Arrays with no sampled elements stay `array`.
+ */
+export function matchTypes(field: { types: readonly string[]; elementTypes?: readonly string[] }): string[] {
+  return [...new Set(field.types.flatMap((type) => (type === "array" && field.elementTypes?.length ? field.elementTypes : [type])))];
+}
+
 /** A new row for a field, typed from its sampled types. */
 export function newCondition(field: string, types: readonly string[] = []): Condition {
   const type = valueTypeFor(types);

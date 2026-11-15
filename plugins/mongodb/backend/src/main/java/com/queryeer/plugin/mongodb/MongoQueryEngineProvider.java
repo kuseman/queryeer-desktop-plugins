@@ -69,6 +69,8 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     static final int FIELD_SAMPLE_MAX_CHILDREN = 200;
     /** Upper bound on distinct (parent, key) groups the sample returns, keeping the $facet output well under 16 MB. */
     static final int FIELD_SAMPLE_MAX_NESTED = 5_000;
+    /** Element types are read from the first this many elements of each sampled array. */
+    static final int FIELD_SAMPLE_MAX_ELEMENTS = 50;
     static final String STATE_CONNECTION_ID = "connectionId";
     static final String STATE_DATABASE = "database";
 
@@ -401,7 +403,7 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
                     "fields": [
                         { "$project": { "kv": { "$objectToArray": "$$ROOT" } } },
                         { "$unwind": "$kv" },
-                        { "$group": { "_id": "$kv.k", "count": { "$sum": 1 }, "types": { "$addToSet": { "$type": "$kv.v" } } } }
+                        { "$group": { "_id": "$kv.k", "count": { "$sum": 1 }, "types": { "$addToSet": { "$type": "$kv.v" } }, "elementTypes": %s } }
                     ],
                     "nested": [
                         { "$project": { "kv": { "$objectToArray": "$$ROOT" } } },
@@ -409,12 +411,12 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
                         { "$match": { "$expr": { "$eq": [ { "$type": "$kv.v" }, "object" ] } } },
                         { "$project": { "parent": "$kv.k", "sub": { "$objectToArray": "$kv.v" } } },
                         { "$unwind": "$sub" },
-                        { "$group": { "_id": { "parent": "$parent", "key": "$sub.k" }, "count": { "$sum": 1 }, "types": { "$addToSet": { "$type": "$sub.v" } } } },
+                        { "$group": { "_id": { "parent": "$parent", "key": "$sub.k" }, "count": { "$sum": 1 }, "types": { "$addToSet": { "$type": "$sub.v" } }, "elementTypes": %s } },
                         { "$sort": { "count": -1 } },
                         { "$limit": %d }
                     ]
                 } }
-                """.formatted(FIELD_SAMPLE_MAX_NESTED)));
+                """.formatted(elementTypes("$kv.v"), elementTypes("$sub.v"), FIELD_SAMPLE_MAX_NESTED)));
         BsonDocument facet = client.getDatabase(database)
                 .getCollection(collection, BsonDocument.class)
                 .aggregate(pipeline)
@@ -473,6 +475,17 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
         return result;
     }
 
+    /**
+     * Accumulates the $type names of the elements of array values (the first {@value #FIELD_SAMPLE_MAX_ELEMENTS} of each), as a set of lists that
+     * {@link #sampledField} flattens. A query on an array field matches its elements, so the query bar types its conditions from these.
+     */
+    private static String elementTypes(String value)
+    {
+        return """
+                { "$addToSet": { "$cond": [ { "$isArray": "%1$s" }, { "$map": { "input": { "$slice": [ "%1$s", %2$d ] }, "in": { "$type": "$$this" } } }, [] ] } }"""
+                .formatted(value, FIELD_SAMPLE_MAX_ELEMENTS);
+    }
+
     /** Most common first, then by name. */
     private static final Comparator<Map<String, Object>> FIELD_ORDER = Comparator.<Map<String, Object>, Long> comparing(entry -> -((Long) entry.get("count")))
             .thenComparing(entry -> ((String) entry.get("name")).toLowerCase(Locale.ROOT));
@@ -493,6 +506,17 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
             entry.put("parent", parent);
         }
         entry.put("types", types);
+        java.util.TreeSet<String> elementTypes = new java.util.TreeSet<>();
+        for (BsonValue list : group.getArray("elementTypes", new BsonArray()))
+        {
+            list.asArray()
+                    .forEach(type -> elementTypes.add(type.asString()
+                            .getValue()));
+        }
+        if (!elementTypes.isEmpty())
+        {
+            entry.put("elementTypes", List.copyOf(elementTypes));
+        }
         entry.put("count", group.get("count")
                 .asNumber()
                 .longValue());

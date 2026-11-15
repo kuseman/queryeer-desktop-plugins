@@ -6,7 +6,7 @@ import { readSelectedDatabase, resolveConnection } from "./binding.js";
 import { parseConnections } from "./connections.js";
 import { CONNECTIONS_SETTING_ID, DATABASE_STATE_KEY, QUERY_BAR_STATE_KEY } from "./constants.js";
 import { badgeFor, describeEntry, groupCollections } from "./collectionGroups.js";
-import { collectionsOf, fieldsOf, formatCount, refreshFields, subscribeExplorer, valuesOf, type FieldInfo, type FieldValues } from "./MongoExplorer.js";
+import { collectionsOf, describeTypes, fieldsOf, formatCount, refreshFields, subscribeExplorer, valuesOf, type FieldInfo, type FieldValues } from "./MongoExplorer.js";
 import {
   LIMIT_CHOICES,
   OPERATOR_LABELS,
@@ -16,6 +16,7 @@ import {
   clauseFor,
   filterSummary,
   isSortable,
+  matchTypes,
   newCondition,
   operatorsFor,
   suggestsValues,
@@ -475,7 +476,7 @@ function FieldsPopover(props: BuilderProps): JSX.Element {
   const chosen = new Set(state.projection.fields);
   // Fields chosen earlier but missing from this sample stay listed, so they can be unchecked
   const names = [...new Set([...fields.map((field) => field.name), ...state.projection.fields])];
-  const typesOf = new Map(fields.map((field) => [field.name, field.types.join(" | ")]));
+  const typesOf = new Map(fields.map((field) => [field.name, describeTypes(field)]));
   const parentOf = new Map(fields.map((field) => [field.name, field.parent]));
   const visible = names.filter((name) => name.toLowerCase().includes(search.trim().toLowerCase()));
 
@@ -553,7 +554,8 @@ function FilterPopover(props: BuilderProps): JSX.Element {
   const { state, onChange } = props;
   const { fields, status } = useFields(props);
   const { combine, conditions } = state.filter;
-  const typesOf = new Map(fields.map((field) => [field.name, field.types]));
+  // Conditions on array fields compare against the elements
+  const typesOf = new Map(fields.map((field) => [field.name, matchTypes(field)]));
 
   const update = (next: Condition[], run = false): void => onChange(withFilter(state, { combine, conditions: next }), run);
   const replace = (index: number, condition: Condition, run = false): void =>
@@ -587,7 +589,7 @@ function FilterPopover(props: BuilderProps): JSX.Element {
       {status}
       <div>
         <button type="button" className="qmongo-button"
-          onClick={() => update([...conditions, newCondition(firstUnused?.name ?? "", firstUnused?.types)])}>
+          onClick={() => update([...conditions, newCondition(firstUnused?.name ?? "", firstUnused ? matchTypes(firstUnused) : undefined)])}>
           + Add condition
         </button>
       </div>

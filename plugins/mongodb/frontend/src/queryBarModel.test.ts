@@ -30,6 +30,7 @@ import {
   splitList,
   CHOOSABLE_VALUE_TYPES,
   isSortable,
+  matchTypes,
   suggestsValues,
   valueOptions,
   withCollection,
@@ -301,5 +302,18 @@ describe("guessCollection", () => {
     expect(guessCollection('{ "count": "orders" }\ndb.customers.find()')).toBe("orders");
     expect(guessCollection("db.runCommand({ ping: 1 })")).toBe("");
     expect(guessCollection("db.getSiblingDB('x').orders.find()")).toBe("");
+  });
+});
+
+describe("matchTypes", () => {
+  it("types a condition on an array field from its elements, so `categoryIds = 181` compares numbers", () => {
+    expect(matchTypes({ types: ["array"], elementTypes: ["int"] })).toEqual(["int"]);
+    expect(valueTypeFor(matchTypes({ types: ["array"], elementTypes: ["int", "long"] }))).toBe("number");
+    expect(matchTypes({ types: ["array", "int"], elementTypes: ["int"] }), "arrays and single values").toEqual(["int"]);
+  });
+
+  it("keeps arrays of documents as documents to dig into, and arrays without sampled elements as arrays", () => {
+    expect(isSortable(matchTypes({ types: ["array"], elementTypes: ["object"] }))).toBe(false);
+    expect(matchTypes({ types: ["array", "null"] })).toEqual(["array", "null"]);
   });
 });
