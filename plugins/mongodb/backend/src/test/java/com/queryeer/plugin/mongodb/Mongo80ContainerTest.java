@@ -5,6 +5,6 @@ class Mongo80ContainerTest extends BaseMongoContainerTest
 {
     Mongo80ContainerTest()
     {
-        super("mongo:8.0.26");
+        super("mongo:8.0.38");
     }
 }

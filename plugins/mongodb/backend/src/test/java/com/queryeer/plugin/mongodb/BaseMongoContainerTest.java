@@ -67,7 +67,7 @@ abstract class BaseMongoContainerTest
     private FileConnections fileConnections;
     private MongoClientCache clientCache;
 
-    /** @param image the MongoDB image to test against, with an exact version, e.g. {@code mongo:8.0.26} */
+    /** @param image the MongoDB image to test against, with an exact version, e.g. {@code mongo:8.0.38} */
     BaseMongoContainerTest(String image)
     {
         this.image = image;
