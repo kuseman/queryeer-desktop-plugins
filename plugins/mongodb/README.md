@@ -235,7 +235,7 @@ A `.mongo` file holds statements in two forms, which can be mixed freely. Each s
 ### Testing
 
 - Backend: JUnit 5, plus Testcontainers tests that are skipped when Docker is not available.
-  - Server versions: the end-to-end tests are in the abstract `BaseMongoContainerTest`, and each supported version has a subclass that only names its image: `Mongo70ContainerTest` (`mongo:7.0.39`), `Mongo80ContainerTest` (`mongo:8.0.26`, long-term support) and `Mongo83ContainerTest` (`mongo:8.3.17`, latest). Adding a version is one small class. Images are pinned to exact versions, so a new server release cannot change a test run by itself.
+  - Server versions: the end-to-end tests are in the abstract `BaseMongoContainerTest`, and each supported version has a subclass that only names its image: `Mongo70ContainerTest` (`mongo:7.0.39`), `Mongo80ContainerTest` (`mongo:8.0.38`, long-term support) and `Mongo83ContainerTest` (`mongo:8.3.17`, latest). Adding a version is one small class. Images are pinned to exact versions, so a new server release cannot change a test run by itself.
   - `ShellParserMongoshTest` runs on 7.0 only: it compares with mongosh, a client, so the server version does not matter.
   - `ExplainGraphTest` uses explain replies captured from 8.3 (SBE plans) and 7.0 (the same aggregations as classic pipeline plans), so plan shapes of both are tested without Docker. The tests use a `RecordingPublisher`, modelled on the one in the JDBC engine's tests, and cover:
   - command parsing and positions
