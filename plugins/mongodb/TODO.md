@@ -104,8 +104,16 @@ Through the public `tableOutputContextMenu`.
 
 ## 6. Explain view
 
-- [ ] A readable plan summary: winning plan stages (`IXSCAN`/`COLLSCAN`), documents and keys examined vs. returned, time
-- [ ] Check whether the host's query-plan artifacts (used by SQL Server) can render it
+- [x] Uses the host's plan support, which is generic underneath the JDBC buttons: a run's `intent` (`plan.estimated` / `plan.actual`) plus a `plan` graph artifact, which the host shows in the Plan output (as for Postgres and SQL Server)
+- [x] **Estimated Plan** and **Actual Plan** toolbar buttons for MongoDB files (`planActions.ts`), same titles and places as JDBC's. The intent is set through the engine's execution context provider; the host's execute command is used, so a selection is respected.
+  - Estimated: `explain` with `queryPlanner`, nothing is executed
+  - Actual (a toggle per file): `explain` with `executionStats`; the query runs on the server, but only the plan with its counts comes back, like Postgres's `EXPLAIN ANALYZE`
+  - Statements without a plan (`listIndexes`, `dbStats`, ...) are listed in the output
+- [x] Plan graph (`ExplainGraph.java`): one node per stage, edges carrying the documents passed on; nodes coloured by their share of the documents and keys examined; `COLLSCAN` always flagged; index, bounds, filter, sort and counts per node; returned / examined / time and rejected plans in the summary
+  - Classic plans (`executionStages` drawn as is), slot-based (SBE) plans (`winningPlan.queryPlan`, with counts mapped from engine stages by `planNodeId`, leaf counters only so nothing is counted twice), aggregations split into `$cursor` + later stages, and sharded plans
+  - Tests: `ExplainGraphTest` on explain replies captured from MongoDB 8.3 (SBE `$group` and `$lookup`, classic index + sort), container tests on 7.0 for both buttons
+- [x] An `explain` written by hand (`db.orders.find().explain()`) shows its reply as rows, as before, and also as a graph in the Plan output
+- [ ] Maybe: rejected plans as their own graphs, to compare
 
 ## 7. Completion and validation in the editor
 

@@ -25,6 +25,7 @@ import { registerGridActions } from "./gridActions.js";
 import { MongoQueryBar } from "./MongoQueryBar.js";
 import { MONGO_LANGUAGE_ID, mongoLanguage } from "./mongoLanguage.js";
 import { mongoOutline } from "./mongoOutline.js";
+import { PlanActions } from "./planActions.js";
 import styles from "./styles.css";
 
 const STYLE_ELEMENT_ID = "com-queryeer-mongodb-styles";
@@ -150,17 +151,26 @@ function registerEngine(context: PluginContext): void {
 
   disposables.push(context.queryEngines.registerEngine({ engineId: ENGINE_ID, mimeTypes: [MIME_TYPE] }));
 
+  // Estimated Plan / Actual Plan toolbar buttons for MongoDB files
+  const plans = new PlanActions(context);
+  plans.register();
+
   // Every execution (and file-scoped invoke) carries the file's connection and selected database, like JDBC.
   // The backend trusts engineState over its file session, which is not updated on rebind (API-GAPS.md B1).
+  // A plan request (the buttons above) also sets the run's intent.
   disposables.push(
-    context.queryEngines.registerExecutionContextProvider(ENGINE_ID, ({ fileId }) => {
+    context.queryEngines.registerExecutionContextProvider(ENGINE_ID, ({ fileId, options }) => {
       const file = fileId ? context.files.getFile(fileId) : undefined;
       const engineState = buildEngineState(
         file,
         parseConnections(context.settings.getValue(CONNECTIONS_SETTING_ID)),
         file ? readSelectedDatabase(context.files.getEditorState(file.fileId, DATABASE_STATE_KEY)) : undefined
       );
-      return engineState ? { engineState } : undefined;
+      const planOptions = fileId ? plans.optionsFor(fileId, options) : undefined;
+      if (!engineState && !planOptions) {
+        return undefined;
+      }
+      return { ...(engineState ? { engineState } : {}), ...(planOptions ? { options: planOptions } : {}) };
     })
   );
 

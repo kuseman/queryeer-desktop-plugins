@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.bson.BsonArray;
@@ -69,8 +70,34 @@ final class CommandRunner
         }
     }
 
+    /** Commands {@code explain} accepts, and so the ones the plan buttons can show a plan for. */
+    static final Set<String> EXPLAINABLE = Set.of("find", "aggregate", "count", "distinct");
+
+    /**
+     * Runs {@code { explain: command, verbosity }} for the plan buttons and returns the reply, or {@code null} when cancelled. An {@code explain}
+     * command written by hand is run with the requested verbosity instead of its own.
+     */
+    BsonDocument explain(Execution execution, MongoClient client, String database, ParsedCommand parsed, String verbosity, Deadline deadline)
+    {
+        BsonDocument inner = "explain".equals(parsed.name()) ? parsed.command()
+                .getDocument("explain")
+                : parsed.command();
+        BsonDocument command = new BsonDocument("explain", inner).append("verbosity", new BsonString(verbosity))
+                .append("comment", new BsonString(execution.id()));
+        return runCommand(execution, client.getDatabase(database), command, deadline, true);
+    }
+
     /** Runs the command and returns the number of rows published. */
     long run(Execution execution, MongoClient client, String database, ParsedCommand parsed, ResultSetWriter writer, Deadline deadline)
+    {
+        return run(execution, client, database, parsed, writer, deadline, reply ->
+        {
+        });
+    }
+
+    /** Runs the command and returns the number of rows published; the reply of an {@code explain} command is also given to {@code explainReplies}. */
+    long run(Execution execution, MongoClient client, String database, ParsedCommand parsed, ResultSetWriter writer, Deadline deadline,
+            java.util.function.Consumer<BsonDocument> explainReplies)
     {
         BsonDocument command = parsed.command()
                 .clone();
@@ -99,6 +126,10 @@ final class CommandRunner
 
         List<BsonDocument> rows;
         String name = parsed.name();
+        if ("explain".equals(name))
+        {
+            explainReplies.accept(reply);
+        }
         boolean empty = "distinct".equals(name) && reply.getArray("values", new BsonArray())
                 .isEmpty()
                 || "count".equals(name) && reply.get("n") instanceof BsonValue n
@@ -119,9 +150,7 @@ final class CommandRunner
         }
         else
         {
-            BsonDocument row = reply.clone();
-            REPLY_NOISE.forEach(row::remove);
-            rows = List.of(row);
+            rows = List.of(replyRow(reply));
         }
 
         writer.start(rows, false);
@@ -131,6 +160,14 @@ final class CommandRunner
             warnIfMissingCollection(execution, client, database, parsed);
         }
         return writer.rowCount();
+    }
+
+    /** A command reply as one row, without the reply fields every command has. */
+    static BsonDocument replyRow(BsonDocument reply)
+    {
+        BsonDocument row = reply.clone();
+        REPLY_NOISE.forEach(row::remove);
+        return row;
     }
 
     /** Commands that read one named collection, and return nothing rather than fail when it does not exist. */

@@ -1,0 +1,199 @@
+{
+ "explainVersion": "2",
+ "stages": [
+  {
+   "$cursor": {
+    "queryPlanner": {
+     "namespace": "qmongo_showcase.orders",
+     "parsedQuery": {
+      "status": {
+       "$eq": "paid"
+      }
+     },
+     "indexFilterSet": false,
+     "queryHash": "1E287549",
+     "planCacheShapeHash": "1E287549",
+     "planCacheKey": "DC4E7093",
+     "optimizationTimeMillis": 0,
+     "cursorType": "regular",
+     "maxIndexedOrSolutionsReached": false,
+     "maxIndexedAndSolutionsReached": false,
+     "maxScansToExplodeReached": false,
+     "prunedSimilarIndexes": false,
+     "winningPlan": {
+      "isCached": false,
+      "queryPlan": {
+       "stage": "GROUP",
+       "planNodeId": 4,
+       "inputStage": {
+        "stage": "FETCH",
+        "planNodeId": 2,
+        "nss": "qmongo_showcase.orders",
+        "inputStage": {
+         "stage": "IXSCAN",
+         "planNodeId": 1,
+         "nss": "qmongo_showcase.orders",
+         "keyPattern": {
+          "status": 1
+         },
+         "indexName": "open_status_partial",
+         "isMultiKey": false,
+         "multiKeyPaths": {
+          "status": []
+         },
+         "isUnique": false,
+         "isSparse": false,
+         "isPartial": true,
+         "indexVersion": 2,
+         "direction": "forward",
+         "indexBounds": {
+          "status": [
+           "[\"paid\", \"paid\"]"
+          ]
+         }
+        }
+       }
+      },
+      "slotBasedPlan": {
+       "slots": "$$RESULT=s13 env: { s5 = {\"status\" : 1} }",
+       "stages": "[4] project [s13 = newObj(\"_id\", s11, \"n\", s12)] \n[4] project [s12 = (convert ( s10, int32) ?: s10)] \n[4] group [s11] [s10 = count()] spillSlots[s9] mergingExprs[sum(s9)] \n[4] project [s11 = (s8 ?: null)] \n[2] fetch s1 = seek, s6 = result, s7 = recordId, s4 = inSnapshotId, s2 = inIndexIdent, s3 = inIndexKey, s5 = inIndexKeyPattern [s8 = customerId] @\"77a8af06-fc60-4caf-ac16-4c1cb2725d6c\" \n[1] ixseek seekKeyLow = KS(3C706169640001) seekKeyHigh = KS(3C7061696400FE) [s3 = indexKey, s1 = recordId, s4 = snapshotId, s2 = indexIdent] [] @\"77a8af06-fc60-4caf-ac16-4c1cb2725d6c\" @\"open_status_partial\" forward "
+      }
+     },
+     "rejectedPlans": []
+    },
+    "executionStats": {
+     "executionSuccess": true,
+     "nReturned": 74,
+     "executionTimeMillis": 1,
+     "totalKeysExamined": 400,
+     "totalDocsExamined": 400,
+     "executionStages": {
+      "stage": "project",
+      "planNodeId": 4,
+      "nReturned": 74,
+      "executionTimeMillisEstimate": 0,
+      "opens": 1,
+      "closes": 1,
+      "saveState": 3,
+      "restoreState": 2,
+      "isEOF": 1,
+      "projections": {
+       "13": "newObj(\"_id\", s11, \"n\", s12) "
+      },
+      "inputStage": {
+       "stage": "project",
+       "planNodeId": 4,
+       "nReturned": 74,
+       "executionTimeMillisEstimate": 0,
+       "opens": 1,
+       "closes": 1,
+       "saveState": 3,
+       "restoreState": 2,
+       "isEOF": 1,
+       "projections": {
+        "12": "(convert ( s10, int32) ?: s10) "
+       },
+       "inputStage": {
+        "stage": "group",
+        "planNodeId": 4,
+        "nReturned": 74,
+        "executionTimeMillisEstimate": 0,
+        "opens": 1,
+        "closes": 1,
+        "saveState": 3,
+        "restoreState": 2,
+        "isEOF": 1,
+        "groupBySlots": [
+         11
+        ],
+        "expressions": {
+         "10": "count() ",
+         "initExprs": {
+          "10": null,
+          "mergingExprs": {
+           "9": "sum(s9) "
+          }
+         }
+        },
+        "usedDisk": false,
+        "spills": 0,
+        "spilledBytes": 0,
+        "spilledRecords": 0,
+        "spilledDataStorageSize": 0,
+        "peakTrackedMemBytes": 3700,
+        "inputStage": {
+         "stage": "project",
+         "planNodeId": 4,
+         "nReturned": 400,
+         "executionTimeMillisEstimate": 0,
+         "opens": 1,
+         "closes": 1,
+         "saveState": 3,
+         "restoreState": 2,
+         "isEOF": 1,
+         "projections": {
+          "11": "(s8 ?: null) "
+         },
+         "inputStage": {
+          "stage": "fetch",
+          "planNodeId": 2,
+          "nReturned": 400,
+          "executionTimeMillisEstimate": 0,
+          "opens": 1,
+          "closes": 1,
+          "saveState": 3,
+          "restoreState": 2,
+          "isEOF": 1,
+          "numReads": 400,
+          "inputStage": {
+           "stage": "ixseek",
+           "planNodeId": 1,
+           "nReturned": 400,
+           "executionTimeMillisEstimate": 0,
+           "opens": 1,
+           "closes": 1,
+           "saveState": 3,
+           "restoreState": 2,
+           "isEOF": 1,
+           "indexName": "open_status_partial",
+           "keysExamined": 400,
+           "seeks": 1,
+           "numReads": 401,
+           "indexKeySlot": 3,
+           "recordIdSlot": 1,
+           "snapshotIdSlot": 4,
+           "indexIdentSlot": 2,
+           "outputSlots": [],
+           "indexKeysToInclude": "00000000000000000000000000000000",
+           "seekKeyLow": "KS(3C706169640001) ",
+           "seekKeyHigh": "KS(3C7061696400FE) "
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "nReturned": 74,
+   "executionTimeMillisEstimate": 1
+  },
+  {
+   "$sort": {
+    "sortKey": {
+     "n": -1
+    }
+   },
+   "totalDataSizeSortedBytesEstimate": 18130,
+   "usedDisk": false,
+   "spills": 0,
+   "spilledBytes": 0,
+   "spilledRecords": 0,
+   "spilledDataStorageSize": 0,
+   "nReturned": 74,
+   "executionTimeMillisEstimate": 1,
+   "peakTrackedMemBytes": 18130
+  }
+ ],
+ "peakTrackedMemBytes": 3700
+}

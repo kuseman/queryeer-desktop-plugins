@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 
 import com.queryeer.backend.api.OutputEvent;
 import com.queryeer.backend.api.QueryPublisher;
+import com.queryeer.backend.contract.query.QueryOutputArtifact;
 
 /** Records everything a provider publishes. Modelled on the RecordingPublisher in Queryeer's JDBC engine tests. */
 final class RecordingPublisher implements QueryPublisher
@@ -21,6 +22,8 @@ final class RecordingPublisher implements QueryPublisher
     final List<ResultSet> resultSets = new CopyOnWriteArrayList<>();
     final List<String> terminalEvents = new CopyOnWriteArrayList<>();
     final List<OutputEvent> messages = new CopyOnWriteArrayList<>();
+    volatile List<String> features = List.of();
+    volatile List<QueryOutputArtifact> artifacts = List.of();
     volatile String errorCode;
     volatile String errorMessage;
     volatile Map<String, Object> errorDetails;
@@ -64,6 +67,14 @@ final class RecordingPublisher implements QueryPublisher
             resultSetRows(rows);
         }
         messages.addAll(events);
+    }
+
+    @Override
+    public void completed(long durationMs, long rowCount, List<String> features, List<QueryOutputArtifact> artifacts, Object engineState)
+    {
+        this.features = features;
+        this.artifacts = artifacts;
+        completed(durationMs, rowCount);
     }
 
     @Override

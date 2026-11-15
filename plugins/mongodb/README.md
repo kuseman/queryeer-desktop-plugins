@@ -175,6 +175,17 @@ A `.mongo` file holds statements in two forms, which can be mixed freely. Each s
 - The implementation is split into a parse stage (text → `{ database, command }`, `CommandParser` and `ShellParser`) and an execute stage (command → cursor → rows), which never knows which form was written. The query bar, explorer actions and templates write command documents.
 - Allowed commands are read-only: `find`, `aggregate`, `count`, `distinct`, `listDatabases`, `listCollections`, `listIndexes`, `dbStats`, `collStats`, `explain`, `ping`, `buildInfo`. An `aggregate` containing `$out` or `$merge` is rejected.
 
+### Query Plans
+
+- The toolbar has **Estimated Plan** and **Actual Plan** for MongoDB files, like JDBC's for SQL Server and Postgres. They use the host's generic plan support: the run carries a plan `intent`, and the backend answers with a `plan` graph artifact, which the host shows in the Plan output.
+  - **Estimated Plan** explains each statement with `queryPlanner`. Nothing is executed.
+  - **Actual Plan** is a toggle per file. While on, runs explain with `executionStats`: the query runs on the server, but only the plan with its counts comes back, not the documents (like Postgres's `EXPLAIN ANALYZE`).
+  - Plans are shown for `find`, `aggregate`, `count` and `distinct`, in either form; other statements are listed in the output. A selection is respected.
+- The graph (`ExplainGraph.java`) has one node per plan stage (`IXSCAN`, `FETCH`, `SORT`, `GROUP`, `EQ_LOOKUP`, `COLLSCAN`, ...) and edges carrying the documents each stage passes on. Nodes are coloured by their share of the documents and index keys examined, and a collection scan is always flagged. Each node lists its index, bounds, filter or sort, and its counts; the summary gives documents returned and examined, time, and how many other plans were considered.
+- Plans from the newer slot-based engine (SBE, used for many aggregations) report counts on low-level engine stages; they are mapped onto the readable stages by `planNodeId`. Aggregations split into a `$cursor` and later stages, and sharded plans, are drawn as well.
+- Each explain reply is also a result row (one per statement, top-level fields as columns, like a hand-written explain), so the plan can be read or copied as JSON from the grid or the Text output. The host still opens the Plan output after the run.
+- An `explain` command written by hand still shows its reply as rows, and its plan also appears in the Plan output.
+
 ### Results
 
 - Results stream to the client through `QueryPublisher`: `resultSetStart`, then `resultSetRows` batches, then `completed` or `failed`.
