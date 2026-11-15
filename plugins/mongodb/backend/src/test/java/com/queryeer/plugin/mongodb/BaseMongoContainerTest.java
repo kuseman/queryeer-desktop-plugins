@@ -21,6 +21,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInstance;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.DockerImageName;
@@ -41,8 +42,12 @@ import com.queryeer.backend.api.SecuritySessionClosedException;
 import com.queryeer.backend.api.SettingsModule;
 import com.queryeer.backend.contract.query.QueryExecuteOptions;
 
-/** Runs the provider against a real MongoDB server. Skipped when Docker is not available. */
-class MongoQueryEngineProviderContainerTest
+/**
+ * Runs the provider against a real MongoDB server. Skipped when Docker is not available. Each supported server version has a subclass that names its image (e.g. {@link Mongo80ContainerTest}); every
+ * test here runs against each of them.
+ */
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+abstract class BaseMongoContainerTest
 {
     private static final String SLOW_STAGE_TEMPLATE = """
             { "$addFields": { "slow": { "$function": {
@@ -50,29 +55,37 @@ class MongoQueryEngineProviderContainerTest
                 "args": [], "lang": "js" } } } }
             """;
 
-    private static GenericContainer<?> mongo;
-    private static MongoClient seedClient;
-    private static String hosts;
+    private final String image;
+    private GenericContainer<?> mongo;
+    private MongoClient seedClient;
+    private String hosts;
 
     private MongoQueryEngineProvider provider;
     private FileConnections fileConnections;
     private MongoClientCache clientCache;
 
+    /** @param image the MongoDB image to test against, with an exact version, e.g. {@code mongo:8.0.26} */
+    BaseMongoContainerTest(String image)
+    {
+        this.image = image;
+    }
+
+    @SuppressWarnings("resource")
     @BeforeAll
-    static void startMongo()
+    void startMongo()
     {
         assumeTrue(DockerClientFactory.instance()
                 .isDockerAvailable(), "Docker is not available");
-        mongo = new GenericContainer<>(DockerImageName.parse("mongo:7.0")).withExposedPorts(27017);
+        mongo = new GenericContainer<>(DockerImageName.parse(image)).withExposedPorts(27017);
         mongo.start();
         hosts = mongo.getHost() + ":" + mongo.getMappedPort(27017);
         seedClient = MongoClients.create("mongodb://" + hosts);
 
         seedClient.getDatabase("shop")
                 .getCollection("orders")
-                .insertMany(List.of(Document.parse("{ \"_id\": 1, \"status\": \"open\", \"total\": 10, \"customer\": { \"name\": \"A\" } }"), Document.parse(
-                        "{ \"_id\": 2, \"status\": \"closed\", \"total\": 20, \"customer\": { \"name\": \"B\" } }"), Document.parse(
-                                "{ \"_id\": 3, \"status\": \"open\", \"total\": 30, \"note\": \"late\" }"), Document.parse("{ \"_id\": 4, \"status\": \"open\", \"total\": 40 }"),
+                .insertMany(List.of(Document.parse("{ \"_id\": 1, \"status\": \"open\", \"total\": 10, \"customer\": { \"name\": \"A\" } }"),
+                        Document.parse("{ \"_id\": 2, \"status\": \"closed\", \"total\": 20, \"customer\": { \"name\": \"B\" } }"),
+                        Document.parse("{ \"_id\": 3, \"status\": \"open\", \"total\": 30, \"note\": \"late\" }"), Document.parse("{ \"_id\": 4, \"status\": \"open\", \"total\": 40 }"),
                         Document.parse("{ \"_id\": 5, \"status\": \"closed\", \"total\": 50, \"tags\": [\"x\"] }")));
         seedClient.getDatabase("other")
                 .getCollection("things")
@@ -80,7 +93,7 @@ class MongoQueryEngineProviderContainerTest
     }
 
     @AfterAll
-    static void stopMongo()
+    void stopMongo()
     {
         if (seedClient != null)
         {
@@ -205,9 +218,9 @@ class MongoQueryEngineProviderContainerTest
         assertEquals(1, typo.messages.size());
         assertEquals(OutputSeverity.WARNING, typo.messages.get(0)
                 .severity());
-        assertEquals("Collection 'order' does not exist in database 'shop', so find returned nothing (MongoDB does not report missing collections as errors)."
-                     + " Did you mean 'orders'?", typo.messages.get(0)
-                             .message());
+        assertEquals("Collection 'order' does not exist in database 'shop', so find returned nothing (MongoDB does not report missing collections as errors)." + " Did you mean 'orders'?",
+                typo.messages.get(0)
+                        .message());
 
         RecordingPublisher count = execute("{ \"count\": \"nothing_like_it\" }", local());
         assertEquals(1, count.messages.size());
@@ -361,8 +374,7 @@ class MongoQueryEngineProviderContainerTest
     {
         // Regression: the driver timeout must not be applied to getMore (the server rejects maxTimeMS there)
         RecordingPublisher publisher = new RecordingPublisher();
-        provider.execute("qx-timeout-batches", "file-1", "{ \"find\": \"orders\", \"batchSize\": 2 }", local(), new QueryExecuteOptions(null, 15000, null, null, null),
-                publisher);
+        provider.execute("qx-timeout-batches", "file-1", "{ \"find\": \"orders\", \"batchSize\": 2 }", local(), new QueryExecuteOptions(null, 15000, null, null, null), publisher);
 
         assertEquals(List.of("completed"), publisher.terminalEvents, String.valueOf(publisher.errorMessage));
         assertEquals(5, publisher.totalRows());
@@ -387,7 +399,7 @@ class MongoQueryEngineProviderContainerTest
     {
         AtomicBoolean cancelled = new AtomicBoolean();
         RecordingPublisher publisher = new RecordingPublisher();
-        publisher.onRows(rows ->
+        publisher.onRows(_ ->
         {
             if (cancelled.compareAndSet(false, true))
             {
@@ -460,8 +472,7 @@ class MongoQueryEngineProviderContainerTest
     @Test
     void lockedVaultPropagatesForHostUnlockFlow()
     {
-        assertThrows(SecuritySessionClosedException.class, () -> provider.execute("qx-locked", "file-1", "{ \"ping\": 1 }", Map.of("connectionId", "locked"), null,
-                new RecordingPublisher()));
+        assertThrows(SecuritySessionClosedException.class, () -> provider.execute("qx-locked", "file-1", "{ \"ping\": 1 }", Map.of("connectionId", "locked"), null, new RecordingPublisher()));
     }
 
     @Test
@@ -474,9 +485,7 @@ class MongoQueryEngineProviderContainerTest
         @SuppressWarnings("unchecked")
         Map<String, Object> ping = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_PING, Map.of("engineState", local()));
         assertEquals(true, ping.get("ok"));
-        assertTrue(ping.get("version")
-                .toString()
-                .startsWith("7."));
+        assertEquals(serverVersion(), ping.get("version"));
     }
 
     @Test
@@ -490,14 +499,13 @@ class MongoQueryEngineProviderContainerTest
         seedClient.getDatabase("shop")
                 .createCollection("metrics", new CreateCollectionOptions().timeSeriesOptions(new TimeSeriesOptions("ts").metaField("sensor")));
         seedClient.getDatabase("shop")
-                .createCollection("customers", new CreateCollectionOptions().validationOptions(new ValidationOptions()
-                        .validator(Document.parse("{ \"$jsonSchema\": { \"required\": [\"email\"] } }"))
+                .createCollection("customers", new CreateCollectionOptions().validationOptions(new ValidationOptions().validator(Document.parse("{ \"$jsonSchema\": { \"required\": [\"email\"] } }"))
                         .validationAction(ValidationAction.WARN)));
         try
         {
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> collections = (List<Map<String, Object>>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_COLLECTIONS, Map.of("connectionId",
-                    "local", "database", "shop"));
+            List<Map<String, Object>> collections = (List<Map<String, Object>>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_COLLECTIONS,
+                    Map.of("connectionId", "local", "database", "shop"));
             Map<String, Object> orders = collections.stream()
                     .filter(c -> "orders".equals(c.get("name")))
                     .findFirst()
@@ -529,8 +537,8 @@ class MongoQueryEngineProviderContainerTest
             assertEquals("warn", customers.get("validationAction"));
 
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> indexes = (List<Map<String, Object>>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_INDEXES, Map.of("connectionId", "local",
-                    "database", "shop", "collection", "orders"));
+            List<Map<String, Object>> indexes = (List<Map<String, Object>>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_INDEXES,
+                    Map.of("connectionId", "local", "database", "shop", "collection", "orders"));
             assertEquals(List.of("_id_", "status_1_total_-1"), indexes.stream()
                     .map(i -> i.get("name"))
                     .toList());
@@ -560,8 +568,8 @@ class MongoQueryEngineProviderContainerTest
     void invokeSamplesFieldsWithTypesAndFrequency()
     {
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> fields = (List<Map<String, Object>>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_FIELDS, Map.of("connectionId", "local",
-                "database", "shop", "collection", "orders"));
+        List<Map<String, Object>> fields = (List<Map<String, Object>>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_FIELDS,
+                Map.of("connectionId", "local", "database", "shop", "collection", "orders"));
 
         assertEquals("_id", fields.get(0)
                 .get("name"), "_id comes first");
@@ -598,13 +606,12 @@ class MongoQueryEngineProviderContainerTest
         MongoCollection<Document> events = seedClient.getDatabase("shop")
                 .getCollection("kafka_events");
         events.insertMany(List.of(Document.parse("{ \"payload\": { \"orderId\": 1, \"status\": \"new\", \"meta\": { \"deep\": 1 }, \"a.b\": 1, \"$odd\": 1 } }"),
-                Document.parse("{ \"payload\": { \"orderId\": 2, \"lines\": [] } }"), Document.parse("{ \"payload\": \"not a document\" }"),
-                Document.parse("{ \"items\": [ { \"sku\": \"x\" } ] }")));
+                Document.parse("{ \"payload\": { \"orderId\": 2, \"lines\": [] } }"), Document.parse("{ \"payload\": \"not a document\" }"), Document.parse("{ \"items\": [ { \"sku\": \"x\" } ] }")));
         try
         {
             @SuppressWarnings("unchecked")
-            List<Map<String, Object>> fields = (List<Map<String, Object>>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_FIELDS, Map.of("connectionId",
-                    "local", "database", "shop", "collection", "kafka_events"));
+            List<Map<String, Object>> fields = (List<Map<String, Object>>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_FIELDS,
+                    Map.of("connectionId", "local", "database", "shop", "collection", "kafka_events"));
 
             assertEquals(List.of("_id", "payload", "payload.orderId", "payload.lines", "payload.meta", "payload.status", "items"), fields.stream()
                     .map(f -> f.get("name"))
@@ -630,8 +637,8 @@ class MongoQueryEngineProviderContainerTest
     @SuppressWarnings("unchecked")
     void invokeListsDistinctValuesForSuggestions()
     {
-        Map<String, Object> status = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database",
-                "shop", "collection", "orders", "field", "status"));
+        Map<String, Object> status = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES,
+                Map.of("connectionId", "local", "database", "shop", "collection", "orders", "field", "status"));
         assertEquals(true, status.get("complete"));
         assertEquals(List.of(Map.of("type", "string", "text", "closed"), Map.of("type", "string", "text", "open")), status.get("values"));
         assertNull(status.get("sampled"), "small collections are read in full");
@@ -640,22 +647,22 @@ class MongoQueryEngineProviderContainerTest
         assertEquals(MongoQueryEngineProvider.VALUE_SUGGESTION_SAMPLE_SIZE, sampled.get("sampled"), "larger collections are sampled");
         assertEquals(status.get("values"), sampled.get("values"));
 
-        Map<String, Object> totals = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database",
-                "shop", "collection", "orders", "field", "total"));
+        Map<String, Object> totals = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES,
+                Map.of("connectionId", "local", "database", "shop", "collection", "orders", "field", "total"));
         assertEquals(List.of("10", "20", "30", "40", "50"), ((List<Map<String, Object>>) totals.get("values")).stream()
                 .map(v -> v.get("text"))
                 .toList(), "numbers in numeric order");
 
-        Map<String, Object> tags = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database",
-                "shop", "collection", "orders", "field", "tags"));
+        Map<String, Object> tags = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES,
+                Map.of("connectionId", "local", "database", "shop", "collection", "orders", "field", "tags"));
         assertEquals(List.of(Map.of("type", "string", "text", "x")), tags.get("values"), "array elements one by one");
 
-        Map<String, Object> nested = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database",
-                "shop", "collection", "orders", "field", "customer.name"));
+        Map<String, Object> nested = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES,
+                Map.of("connectionId", "local", "database", "shop", "collection", "orders", "field", "customer.name"));
         assertEquals(List.of(Map.of("type", "string", "text", "A"), Map.of("type", "string", "text", "B")), nested.get("values"));
 
-        Map<String, Object> documents = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database",
-                "shop", "collection", "orders", "field", "customer"));
+        Map<String, Object> documents = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES,
+                Map.of("connectionId", "local", "database", "shop", "collection", "orders", "field", "customer"));
         assertEquals(List.of(), documents.get("values"), "embedded documents cannot be typed into a filter");
 
         MongoCollection<Document> many = seedClient.getDatabase("shop")
@@ -668,8 +675,8 @@ class MongoQueryEngineProviderContainerTest
         many.insertMany(documentsWithManyValues);
         try
         {
-            Map<String, Object> tooMany = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local",
-                    "database", "shop", "collection", "many_values", "field", "n"));
+            Map<String, Object> tooMany = (Map<String, Object>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES,
+                    Map.of("connectionId", "local", "database", "shop", "collection", "many_values", "field", "n"));
             assertEquals(false, tooMany.get("complete"));
             assertEquals(List.of(), tooMany.get("values"));
         }
@@ -677,16 +684,16 @@ class MongoQueryEngineProviderContainerTest
         {
             many.drop();
         }
-        assertThrows(IllegalArgumentException.class, () -> provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local",
-                "database", "shop", "collection", "orders", "field", "$where")));
+        assertThrows(IllegalArgumentException.class,
+                () -> provider.invoke("file-1", MongoQueryEngineProvider.ACTION_VALUES, Map.of("connectionId", "local", "database", "shop", "collection", "orders", "field", "$where")));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void invokeReturnsWholeDocumentsByIdInOrder()
     {
-        List<String> documents = (List<String>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_DOCUMENTS, Map.of("connectionId", "local", "database",
-                "shop", "collection", "orders", "ids", "[3, { \"$numberLong\": \"1\" }, 99]"));
+        List<String> documents = (List<String>) provider.invoke("file-1", MongoQueryEngineProvider.ACTION_DOCUMENTS,
+                Map.of("connectionId", "local", "database", "shop", "collection", "orders", "ids", "[3, { \"$numberLong\": \"1\" }, 99]"));
 
         assertEquals(2, documents.size(), "an id that matches nothing is left out");
         assertEquals(3, Document.parse(documents.get(0))
@@ -704,26 +711,22 @@ class MongoQueryEngineProviderContainerTest
     void testConnectionReportsVersionOrReason()
     {
         @SuppressWarnings("unchecked")
-        Map<String, Object> ok = (Map<String, Object>) provider.invoke(null, MongoQueryEngineProvider.ACTION_TEST_CONNECTION, Map.of("connection", Map.of("connectionId", "unsaved",
-                "hosts", hosts)));
+        Map<String, Object> ok = (Map<String, Object>) provider.invoke(null, MongoQueryEngineProvider.ACTION_TEST_CONNECTION, Map.of("connection", Map.of("connectionId", "unsaved", "hosts", hosts)));
         assertEquals(true, ok.get("ok"), String.valueOf(ok));
-        assertTrue(ok.get("version")
-                .toString()
-                .startsWith("7."));
+        assertEquals(serverVersion(), ok.get("version"));
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> noHosts = (Map<String, Object>) provider.invoke(null, MongoQueryEngineProvider.ACTION_TEST_CONNECTION, Map.of("connection", Map.of("connectionId",
-                "unsaved")));
+        Map<String, Object> noHosts = (Map<String, Object>) provider.invoke(null, MongoQueryEngineProvider.ACTION_TEST_CONNECTION, Map.of("connection", Map.of("connectionId", "unsaved")));
         assertEquals(false, noHosts.get("ok"));
 
         @SuppressWarnings("unchecked")
-        Map<String, Object> badOptions = (Map<String, Object>) provider.invoke(null, MongoQueryEngineProvider.ACTION_TEST_CONNECTION, Map.of("connection", Map.of("connectionId",
-                "unsaved", "hosts", hosts, "options", "notAnOption=%%")));
+        Map<String, Object> badOptions = (Map<String, Object>) provider.invoke(null, MongoQueryEngineProvider.ACTION_TEST_CONNECTION,
+                Map.of("connection", Map.of("connectionId", "unsaved", "hosts", hosts, "options", "notAnOption=%%")));
         assertEquals(false, badOptions.get("ok"));
         assertTrue(badOptions.get("message") != null);
 
-        assertThrows(SecuritySessionClosedException.class, () -> provider.invoke(null, MongoQueryEngineProvider.ACTION_TEST_CONNECTION, Map.of("connection", Map.of(
-                "connectionId", "unsaved", "hosts", hosts, "username", "u", "password", Map.of("secretRef", "locked")))));
+        assertThrows(SecuritySessionClosedException.class, () -> provider.invoke(null, MongoQueryEngineProvider.ACTION_TEST_CONNECTION,
+                Map.of("connection", Map.of("connectionId", "unsaved", "hosts", hosts, "username", "u", "password", Map.of("secretRef", "locked")))));
     }
 
     @Test
@@ -757,10 +760,11 @@ class MongoQueryEngineProviderContainerTest
                 .stream()
                 .filter(v -> label.equals(v.label()))
                 .findFirst()
-                .orElseThrow(() -> new AssertionError(label + " not in " + graph.vertices()
-                        .stream()
-                        .map(com.queryeer.backend.contract.graph.GraphVertex::label)
-                        .toList()));
+                .orElseThrow(() -> new AssertionError(label + " not in "
+                                                      + graph.vertices()
+                                                              .stream()
+                                                              .map(com.queryeer.backend.contract.graph.GraphVertex::label)
+                                                              .toList()));
     }
 
     private static Object property(com.queryeer.backend.contract.graph.GraphVertex vertex, String id)
@@ -823,7 +827,8 @@ class MongoQueryEngineProviderContainerTest
 
         assertTrue(publisher.messages.stream()
                 .anyMatch(m -> m.message()
-                        .equals("Line 2: listIndexes has no query plan. Plans are shown for find, aggregate, count and distinct.")), publisher.messages.toString());
+                        .equals("Line 2: listIndexes has no query plan. Plans are shown for find, aggregate, count and distinct.")),
+                publisher.messages.toString());
     }
 
     @Test
@@ -855,13 +860,15 @@ class MongoQueryEngineProviderContainerTest
         assertTrue(aggregate.vertices()
                 .stream()
                 .anyMatch(v -> v.label()
-                        .equals("COLLSCAN")), "the aggregation's scan: " + aggregate.vertices());
+                        .equals("COLLSCAN")),
+                "the aggregation's scan: " + aggregate.vertices());
         assertTrue(aggregate.vertices()
                 .stream()
                 .anyMatch(v -> v.label()
                         .equals("GROUP")
                         || v.label()
-                                .equals("$group")), "the $group, pushed down or not: " + aggregate.vertices());
+                                .equals("$group")),
+                "the $group, pushed down or not: " + aggregate.vertices());
         assertTrue(aggregate.description()
                 .contains("examined 5 documents"), aggregate.description());
 
@@ -883,12 +890,18 @@ class MongoQueryEngineProviderContainerTest
                 .graph(), "COLLSCAN"), "docsExamined"));
     }
 
+    /** The server version of the image under test: its tag. */
+    private String serverVersion()
+    {
+        return image.substring(image.indexOf(':') + 1);
+    }
+
     private static Map<String, Object> local()
     {
         return Map.of("connectionId", "local");
     }
 
-    private static void waitForServerOperation(String comment) throws InterruptedException
+    private void waitForServerOperation(String comment) throws InterruptedException
     {
         long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
         while (System.nanoTime() < until)
@@ -902,7 +915,7 @@ class MongoQueryEngineProviderContainerTest
         throw new AssertionError("server operation " + comment + " never started");
     }
 
-    private static boolean serverOperationRunning(String comment)
+    private boolean serverOperationRunning(String comment)
     {
         List<Document> pipeline = List.of(Document.parse("{ \"$currentOp\": {} }"), new Document("$match", new Document("command.comment", comment)));
         return seedClient.getDatabase("admin")
