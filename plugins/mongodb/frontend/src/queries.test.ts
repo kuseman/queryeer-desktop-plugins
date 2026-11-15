@@ -20,7 +20,7 @@ import { formatCount, formatJsonForTooltip, formatPresence } from "./MongoExplor
 describe("templateCommand", () => {
   it("names the collection first, as the server expects, with a placeholder when none is known", () => {
     for (const { id } of TEMPLATES) {
-      expect(Object.keys(templateCommand(id, "orders"))[0]).toBe(id);
+      expect(Object.keys(templateCommand(id, "orders"))[0]).toBe(id === "elemMatch" ? "find" : id);
       expect(Object.values(templateCommand(id, "orders"))[0]).toBe("orders");
       expect(Object.values(templateCommand(id, ""))[0]).toBe("collection");
     }
@@ -32,6 +32,7 @@ describe("shellTemplateText", () => {
   // The backend's ShellParserTest parses these exact texts and checks they give the JSON templates' commands
   it("writes mongosh statements", () => {
     expect(shellTemplateText("find", "orders")).toBe("db.orders.find({}, {}).sort({ _id: 1 }).skip(0).limit(50)\n");
+    expect(shellTemplateText("elemMatch", "orders")).toBe("db.orders.find({ array: { $elemMatch: { field: \"value\", flag: true } } }).limit(50)\n");
     expect(shellTemplateText("count", "orders")).toBe("db.orders.countDocuments({})\n");
     expect(shellTemplateText("distinct", "orders")).toBe("db.orders.distinct(\"field\", {})\n");
     expect(shellTemplateText("aggregate", "orders")).toBe([

@@ -178,6 +178,8 @@ class ShellParserTest
                 { aggregate: 'orders', pipeline: [{ $match: {} }, { $group: { _id: '$field', count: { $sum: 1 } } }, { $sort: { count: -1 } }, { $limit: 50 }],
                   cursor: {} }
                 """), only(aggregate).command());
+        assertEquals(BsonDocument.parse("{ find: 'orders', filter: { array: { $elemMatch: { field: 'value', flag: true } } }, limit: 50 }"), only(
+                "db.orders.find({ array: { $elemMatch: { field: \"value\", flag: true } } }).limit(50)\n").command());
         assertEquals(BsonDocument.parse("{ count: 'orders', query: {} }"), only("db.orders.countDocuments({})\n").command());
         assertEquals(BsonDocument.parse("{ distinct: 'orders', key: 'field', query: {} }"), only("db.orders.distinct(\"field\", {})\n").command());
         assertEquals(BsonDocument.parse("{ count: 'variantsku-pricehistory', query: {} }"), only("db.getCollection(\"variantsku-pricehistory\").countDocuments({})\n")
