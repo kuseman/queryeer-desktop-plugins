@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -24,8 +25,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.utility.DockerImageName;
 
+import com.mongodb.MongoException;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 import com.mongodb.client.MongoCollection;
@@ -76,10 +79,23 @@ abstract class BaseMongoContainerTest
     {
         assumeTrue(DockerClientFactory.instance()
                 .isDockerAvailable(), "Docker is not available");
-        mongo = new GenericContainer<>(DockerImageName.parse(image)).withExposedPorts(27017);
+        // An open port is not enough: wait until mongod says it accepts connections, as Testcontainers' MongoDB module does
+        mongo = new GenericContainer<>(DockerImageName.parse(image)).withExposedPorts(27017)
+                .waitingFor(Wait.forLogMessage("(?i).*waiting for connections.*", 1)
+                        .withStartupTimeout(Duration.ofMinutes(2)));
         mongo.start();
         hosts = mongo.getHost() + ":" + mongo.getMappedPort(27017);
         seedClient = MongoClients.create("mongodb://" + hosts);
+        try
+        {
+            seedClient.getDatabase("admin")
+                    .runCommand(new Document("ping", 1));
+        }
+        catch (MongoException e)
+        {
+            // Without the server's own log a failed start on CI cannot be told apart from a network problem
+            throw new IllegalStateException(image + " does not answer at " + hosts + " (container running: " + mongo.isRunning() + "). Container log:\n" + mongo.getLogs(), e);
+        }
 
         seedClient.getDatabase("shop")
                 .getCollection("orders")
