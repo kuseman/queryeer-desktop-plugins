@@ -15,11 +15,11 @@ import java.util.concurrent.TimeUnit;
 import org.bson.BsonArray;
 import org.bson.BsonBoolean;
 import org.bson.BsonDocument;
+import org.bson.BsonInt32;
+import org.bson.BsonString;
 import org.bson.BsonValue;
 import org.bson.json.JsonMode;
 import org.bson.json.JsonWriterSettings;
-import org.bson.BsonInt32;
-import org.bson.BsonString;
 
 import com.mongodb.MongoCommandException;
 import com.mongodb.MongoException;
@@ -246,10 +246,8 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
             case ACTION_INDEXES -> listIndexes(client, requiredText(map, "database"), requiredText(map, "collection"));
             case ACTION_FIELDS -> sampleFields(client, requiredText(map, "database"), requiredText(map, "collection"));
             case ACTION_DOCUMENTS -> documentsById(client, requiredText(map, "database"), requiredText(map, "collection"), requiredText(map, "ids"));
-            case ACTION_VALUES -> distinctValues(client, requiredText(map, "database"), requiredText(map, "collection"), requiredText(map, "field"),
-                    VALUE_SUGGESTION_EXACT_MAX_DOCUMENTS);
-            case ACTION_PING ->
-            {
+            case ACTION_VALUES -> distinctValues(client, requiredText(map, "database"), requiredText(map, "collection"), requiredText(map, "field"), VALUE_SUGGESTION_EXACT_MAX_DOCUMENTS);
+            case ACTION_PING -> {
                 BsonDocument buildInfo = client.getDatabase("admin")
                         .runCommand(new BsonDocument("buildInfo", new BsonInt32(1)), BsonDocument.class);
                 Map<String, Object> result = new LinkedHashMap<>();
@@ -263,8 +261,8 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     }
 
     /**
-     * Tests a connection definition from the settings editor (possibly unsaved). Returns {@code { ok: true, version }} or {@code { ok: false, message }}, never throws for
-     * connection problems, so the editor can show the reason inline. A locked vault still propagates so the host can prompt for unlock.
+     * Tests a connection definition from the settings editor (possibly unsaved). Returns {@code { ok: true, version }} or {@code { ok: false, message }}, never throws for connection problems, so the
+     * editor can show the reason inline. A locked vault still propagates so the host can prompt for unlock.
      */
     private Map<String, Object> testConnection(Object connection)
     {
@@ -296,8 +294,8 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     }
 
     /**
-     * Collections and views of a database for the explorer tree, sorted by name: {@code { name, type, count }}. {@code count} is the metadata-based estimate (cheap on
-     * large collections), and {@code null} for views or when the estimate is not available.
+     * Collections and views of a database for the explorer tree, sorted by name: {@code { name, type, count }}. {@code count} is the metadata-based estimate (cheap on large collections), and
+     * {@code null} for views or when the estimate is not available.
      */
     private List<Map<String, Object>> listCollections(MongoClient client, String database)
     {
@@ -389,11 +387,9 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     }
 
     /**
-     * Fields of a collection or view, inferred from a random sample (MongoDB has no declared schema):
-     * {@code { name, types, count, sampled }} for top-level fields, _id first and then most common. Each field that holds an embedded
-     * document is followed by its own fields one level down ({@code payload.orderId}), with {@code parent} set and at most
-     * {@value #FIELD_SAMPLE_MAX_CHILDREN} per parent. Keys that dot notation cannot address (containing '.' or starting with '$') are left out
-     * one level down. The server stops the sampling after {@value #FIELD_SAMPLE_MAX_TIME_MS} ms.
+     * Fields of a collection or view, inferred from a random sample (MongoDB has no declared schema): {@code { name, types, count, sampled }} for top-level fields, _id first and then most common.
+     * Each field that holds an embedded document is followed by its own fields one level down ({@code payload.orderId}), with {@code parent} set and at most {@value #FIELD_SAMPLE_MAX_CHILDREN} per
+     * parent. Keys that dot notation cannot address (containing '.' or starting with '$') are left out one level down. The server stops the sampling after {@value #FIELD_SAMPLE_MAX_TIME_MS} ms.
      */
     private static List<Map<String, Object>> sampleFields(MongoClient client, String database, String collection)
     {
@@ -457,11 +453,11 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
             {
                 continue;
             }
-            children.computeIfAbsent(parent, k -> new ArrayList<>())
+            children.computeIfAbsent(parent, _ -> new ArrayList<>())
                     .add(sampledField(parent + "." + key, parent, field, sampled));
         }
         // _id first, then most common, then by name
-        topLevel.sort(Comparator.<Map<String, Object>, Boolean> comparing(entry -> !"_id".equals(entry.get("name")))
+        topLevel.sort(Comparator.<Map<String, Object>, Boolean>comparing(entry -> !"_id".equals(entry.get("name")))
                 .thenComparing(FIELD_ORDER));
         for (Map<String, Object> entry : topLevel)
         {
@@ -476,18 +472,18 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     }
 
     /**
-     * Accumulates the $type names of the elements of array values (the first {@value #FIELD_SAMPLE_MAX_ELEMENTS} of each), as a set of lists that
-     * {@link #sampledField} flattens. A query on an array field matches its elements, so the query bar types its conditions from these.
+     * Accumulates the $type names of the elements of array values (the first {@value #FIELD_SAMPLE_MAX_ELEMENTS} of each), as a set of lists that {@link #sampledField} flattens. A query on an array
+     * field matches its elements, so the query bar types its conditions from these.
      */
     private static String elementTypes(String value)
     {
         return """
-                { "$addToSet": { "$cond": [ { "$isArray": "%1$s" }, { "$map": { "input": { "$slice": [ "%1$s", %2$d ] }, "in": { "$type": "$$this" } } }, [] ] } }"""
-                .formatted(value, FIELD_SAMPLE_MAX_ELEMENTS);
+                { "$addToSet": { "$cond": [ { "$isArray": "%1$s" }, { "$map": { "input": { "$slice": [ "%1$s", %2$d ] }, "in": { "$type": "$$this" } } }, [] ] } }""".formatted(value,
+                FIELD_SAMPLE_MAX_ELEMENTS);
     }
 
     /** Most common first, then by name. */
-    private static final Comparator<Map<String, Object>> FIELD_ORDER = Comparator.<Map<String, Object>, Long> comparing(entry -> -((Long) entry.get("count")))
+    private static final Comparator<Map<String, Object>> FIELD_ORDER = Comparator.<Map<String, Object>, Long>comparing(entry -> -((Long) entry.get("count")))
             .thenComparing(entry -> ((String) entry.get("name")).toLowerCase(Locale.ROOT));
 
     private static Map<String, Object> sampledField(String name, String parent, BsonDocument group, long sampled)
@@ -525,13 +521,11 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     }
 
     /**
-     * Value suggestions for the query bar's filter: the distinct values of a field (array elements counted one by one, like {@code distinct}) as
-     * {@code { values: [{ type, text }], complete, sampled? }}. Collections over {@code exactMaxDocuments} documents are read through a random
-     * sample of {@value #VALUE_SUGGESTION_SAMPLE_SIZE} documents, given as {@code sampled}, so rare values may be missing; views and
-     * time-series collections are always read in full, since sampling them still runs their whole pipeline. {@code complete} is false, and
-     * the list empty, when there are more than {@value #VALUE_SUGGESTION_LIMIT} values or the server gives up after
-     * {@value #VALUE_SUGGESTION_MAX_TIME_MS} ms. Only values the filter can type in are listed (text, numbers, dates, ObjectIds, booleans),
-     * sorted by type and then by value.
+     * Value suggestions for the query bar's filter: the distinct values of a field (array elements counted one by one, like {@code distinct}) as {@code { values: [{ type, text }], complete, sampled?
+     * }}. Collections over {@code exactMaxDocuments} documents are read through a random sample of {@value #VALUE_SUGGESTION_SAMPLE_SIZE} documents, given as {@code sampled}, so rare values may be
+     * missing; views and time-series collections are always read in full, since sampling them still runs their whole pipeline. {@code complete} is false, and the list empty, when there are more than
+     * {@value #VALUE_SUGGESTION_LIMIT} values or the server gives up after {@value #VALUE_SUGGESTION_MAX_TIME_MS} ms. Only values the filter can type in are listed (text, numbers, dates, ObjectIds,
+     * booleans), sorted by type and then by value.
      */
     static Map<String, Object> distinctValues(MongoClient client, String database, String collection, String field, long exactMaxDocuments)
     {
@@ -590,7 +584,7 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
                     values.add(value);
                 }
             }
-            values.sort(Comparator.<Map<String, Object>, String> comparing(v -> (String) v.get("type"))
+            values.sort(Comparator.<Map<String, Object>, String>comparing(v -> (String) v.get("type"))
                     .thenComparing(MongoQueryEngineProvider::compareSuggestionText));
         }
         result.put("values", values);
@@ -599,8 +593,8 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     }
 
     /**
-     * Whole documents by {@code _id}, for the grid's "Copy document": {@code ids} is an Extended JSON array of {@code _id} values. Returns relaxed
-     * Extended JSON text per document, indented, in the order of {@code ids}; ids that match nothing are left out.
+     * Whole documents by {@code _id}, for the grid's "Copy document": {@code ids} is an Extended JSON array of {@code _id} values. Returns relaxed Extended JSON text per document, indented, in the
+     * order of {@code ids}; ids that match nothing are left out.
      */
     static List<String> documentsById(MongoClient client, String database, String collection, String ids)
     {
@@ -658,26 +652,22 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
         String text;
         switch (value.getBsonType())
         {
-            case STRING ->
-            {
+            case STRING -> {
                 type = "string";
                 text = value.asString()
                         .getValue();
             }
-            case INT32 ->
-            {
+            case INT32 -> {
                 type = "int";
                 text = Integer.toString(value.asInt32()
                         .getValue());
             }
-            case INT64 ->
-            {
+            case INT64 -> {
                 type = "long";
                 text = Long.toString(value.asInt64()
                         .getValue());
             }
-            case DOUBLE ->
-            {
+            case DOUBLE -> {
                 type = "double";
                 double d = value.asDouble()
                         .getValue();
@@ -689,35 +679,30 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
                         && Math.abs(d) < 1e15 ? Long.toString((long) d)
                                 : Double.toString(d);
             }
-            case DECIMAL128 ->
-            {
+            case DECIMAL128 -> {
                 type = "decimal";
                 text = value.asDecimal128()
                         .getValue()
                         .toString();
             }
-            case DATE_TIME ->
-            {
+            case DATE_TIME -> {
                 type = "date";
                 text = java.time.Instant.ofEpochMilli(value.asDateTime()
                         .getValue())
                         .toString();
             }
-            case OBJECT_ID ->
-            {
+            case OBJECT_ID -> {
                 type = "objectId";
                 text = value.asObjectId()
                         .getValue()
                         .toHexString();
             }
-            case BOOLEAN ->
-            {
+            case BOOLEAN -> {
                 type = "bool";
                 text = Boolean.toString(value.asBoolean()
                         .getValue());
             }
-            default ->
-            {
+            default -> {
                 return null;
             }
         }
@@ -744,13 +729,12 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     }
 
     /**
-     * The Estimated Plan / Actual Plan buttons: each statement is explained instead of run ({@code queryPlanner}, or {@code executionStats}, which
-     * runs the query on the server but returns only the plan with its counts), and its plan goes to the Plan output as a graph. The explain reply
-     * itself is also a result row, like a hand-written explain, to read or copy as JSON (the host still opens the Plan output). Statements that
-     * have no plan are listed in the output.
+     * The Estimated Plan / Actual Plan buttons: each statement is explained instead of run ({@code queryPlanner}, or {@code executionStats}, which runs the query on the server but returns only the
+     * plan with its counts), and its plan goes to the Plan output as a graph. The explain reply itself is also a result row, like a hand-written explain, to read or copy as JSON (the host still opens
+     * the Plan output). Statements that have no plan are listed in the output.
      */
-    private void runPlans(Execution execution, MongoClientCache.Handle handle, Map<?, ?> state, List<ParsedCommand> commands, boolean actual, CommandRunner.Deadline deadline,
-            long start, ValueMapper values)
+    private void runPlans(Execution execution, MongoClientCache.Handle handle, Map<?, ?> state, List<ParsedCommand> commands, boolean actual, CommandRunner.Deadline deadline, long start,
+            ValueMapper values)
     {
         GuardedPublisher publisher = execution.publisher();
         String verbosity = actual ? "executionStats"
@@ -768,8 +752,7 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
             String name = explainedName(command);
             if (!CommandRunner.EXPLAINABLE.contains(name))
             {
-                notes.add(new OutputEvent(OutputSeverity.INFO, "Line " + command.line() + ": " + name
-                                                               + " has no query plan. Plans are shown for find, aggregate, count and distinct."));
+                notes.add(new OutputEvent(OutputSeverity.INFO, "Line " + command.line() + ": " + name + " has no query plan. Plans are shown for find, aggregate, count and distinct."));
                 continue;
             }
             BsonDocument reply = runner.explain(execution, handle.client(), resolveDatabase(command, state, handle.settings()), command, verbosity, deadline);
@@ -824,10 +807,13 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
         String name = subject.isEmpty() ? "command"
                 : subject.getFirstKey();
         BsonValue target = subject.get(name);
-        String title = prefix + ": " + name + (target != null
-                && target.isString() ? " " + target.asString()
-                        .getValue()
-                        : "");
+        String title = prefix + ": "
+                       + name
+                       + (target != null
+                               && target.isString()
+                                       ? " " + target.asString()
+                                               .getValue()
+                                       : "");
         String id = "mongodb-plan-" + index;
         return new QueryOutputArtifact(id, "plan", "graph", title, ExplainGraph.convert(explainReply, id, title));
     }
@@ -891,8 +877,8 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
         {
             return "admin";
         }
-        throw new QueryValidationException("No database selected. Choose a database for this file, set a default database on the connection, or add \"$db\" to the command",
-                command.line(), command.column());
+        throw new QueryValidationException("No database selected. Choose a database for this file, set a default database on the connection, or add \"$db\" to the command", command.line(),
+                command.column());
     }
 
     private static String commandErrorMessage(MongoException e)

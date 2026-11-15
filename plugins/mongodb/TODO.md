@@ -94,7 +94,7 @@ Through the public `tableOutputContextMenu`.
   - Values go through the Java driver's JSON reader (unquoted keys, single quotes, trailing commas, shell helpers); `new Date("...")` is rewritten to `ISODate`
   - Comments now work anywhere outside strings, also inside documents (before, a `/* */` inside a document was silently read as a regular expression)
   - Not JavaScript: variables, functions and cursor iteration are rejected with a message saying so; writes are rejected by name
-  - Tests: `ShellParserTest` (statement table, values, errors with positions), `ShellParserMongoshTest` (each statement compared with the command real mongosh sends, via the profiler, in Testcontainers), and end-to-end runs in `MongoQueryEngineProviderContainerTest`
+  - Tests: `ShellParserTest` (statement table, values, errors with positions), `ShellParserMongoshTest` (each statement compared with the command real mongosh sends, via the profiler, in Testcontainers), and end-to-end runs in `BaseMongoContainerTest` (on 7.0, 8.0 and 8.3)
 - [x] `mongodb` editor language (Monarch): highlights both forms (keys, `$operators`, method names, shell helpers, regular expressions, comments)
 - [x] `guessCollection` reads shell statements too, so "Use the query bar" and the grid actions know the collection
 - [ ] Maybe: an option for the query bar to write shell syntax instead of JSON
@@ -111,7 +111,7 @@ Through the public `tableOutputContextMenu`.
   - Statements without a plan (`listIndexes`, `dbStats`, ...) are listed in the output
 - [x] Plan graph (`ExplainGraph.java`): one node per stage, edges carrying the documents passed on; nodes coloured by their share of the documents and keys examined; `COLLSCAN` always flagged; index, bounds, filter, sort and counts per node; returned / examined / time and rejected plans in the summary
   - Classic plans (`executionStages` drawn as is), slot-based (SBE) plans (`winningPlan.queryPlan`, with counts mapped from engine stages by `planNodeId`, leaf counters only so nothing is counted twice), aggregations split into `$cursor` + later stages, and sharded plans
-  - Tests: `ExplainGraphTest` on explain replies captured from MongoDB 8.3 (SBE `$group` and `$lookup`, classic index + sort), container tests on 7.0 for both buttons
+  - Tests: `ExplainGraphTest` on explain replies captured from MongoDB 8.3 (SBE `$group` and `$lookup`, classic index + sort), explain replies from 7.0 (classic `$group`/`$lookup` pipeline stages, a `$lookup` collection scan), container tests on 7.0, 8.0 and 8.3 for both buttons
 - [x] An `explain` written by hand (`db.orders.find().explain()`) shows its reply as rows, as before, and also as a graph in the Plan output
 - [ ] Maybe: rejected plans as their own graphs, to compare
 

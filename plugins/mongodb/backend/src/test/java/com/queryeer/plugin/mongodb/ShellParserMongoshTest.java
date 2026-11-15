@@ -65,6 +65,7 @@ class ShellParserMongoshTest
 
     private static GenericContainer<?> mongo;
 
+    @SuppressWarnings("resource")
     @BeforeAll
     static void startMongo()
     {

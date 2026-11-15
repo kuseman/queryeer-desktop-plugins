@@ -30,8 +30,7 @@ import com.queryeer.backend.api.SettingsModule;
  * One lazily created {@link MongoClient} per connection ID. A client is rebuilt when its connection's settings, including the resolved password, change.
  *
  * <p>
- * Resolving the password goes through the host vault on every lookup, so a locked vault surfaces as {@code SecuritySessionClosedException}, which the host turns into its
- * unlock flow.
+ * Resolving the password goes through the host vault on every lookup, so a locked vault surfaces as {@code SecuritySessionClosedException}, which the host turns into its unlock flow.
  * </p>
  */
 final class MongoClientCache implements AutoCloseable
@@ -59,7 +58,7 @@ final class MongoClientCache implements AutoCloseable
         String password = resolvePassword(settings);
         String fingerprint = fingerprint(settings, password);
 
-        Entry entry = clients.compute(connectionId, (id, existing) ->
+        Entry entry = clients.compute(connectionId, (_, existing) ->
         {
             if (existing != null
                     && existing.fingerprint()
@@ -99,8 +98,8 @@ final class MongoClientCache implements AutoCloseable
     }
 
     /**
-     * Connects with settings that may not be saved yet (for the settings editor's "Test connection"), returns the server version, and closes the client. The password is
-     * still resolved through the vault.
+     * Connects with settings that may not be saved yet (for the settings editor's "Test connection"), returns the server version, and closes the client. The password is still resolved through the
+     * vault.
      */
     String testConnection(MongoConnectionSettings settings)
     {

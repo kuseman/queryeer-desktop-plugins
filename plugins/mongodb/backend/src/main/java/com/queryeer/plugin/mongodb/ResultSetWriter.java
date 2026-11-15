@@ -17,8 +17,8 @@ import com.queryeer.backend.contract.query.ColumnTypes;
  * Publishes one result set of documents.
  *
  * <p>
- * Queryeer fixes the columns when a result set starts. Columns are therefore the top-level keys of the first batch, in first-seen order. When more batches may follow, a
- * trailing {@value #EXTRA_COLUMN} column collects keys that first appear later, so no data is lost.
+ * Queryeer fixes the columns when a result set starts. Columns are therefore the top-level keys of the first batch, in first-seen order. When more batches may follow, a trailing
+ * {@value #EXTRA_COLUMN} column collects keys that first appear later, so no data is lost.
  * </p>
  */
 final class ResultSetWriter
@@ -47,7 +47,7 @@ final class ResultSetWriter
         {
             for (Map.Entry<String, BsonValue> entry : document.entrySet())
             {
-                valuesByKey.computeIfAbsent(entry.getKey(), k -> new ArrayList<>())
+                valuesByKey.computeIfAbsent(entry.getKey(), _ -> new ArrayList<>())
                         .add(entry.getValue());
             }
         }

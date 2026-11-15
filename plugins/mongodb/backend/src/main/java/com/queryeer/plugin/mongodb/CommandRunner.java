@@ -25,8 +25,8 @@ import com.queryeer.backend.api.OutputSeverity;
  * The "execute" stage: runs one {@link ParsedCommand} and publishes its reply as one result set.
  *
  * <ul>
- * <li>Cursor replies ({@code find}, {@code aggregate}, {@code listCollections}, {@code listIndexes}): one row per document, followed with {@code getMore} until the cursor is
- * exhausted or the query is cancelled.</li>
+ * <li>Cursor replies ({@code find}, {@code aggregate}, {@code listCollections}, {@code listIndexes}): one row per document, followed with {@code getMore} until the cursor is exhausted or the query is
+ * cancelled.</li>
  * <li>{@code distinct}: one row per value in a {@code value} column.</li>
  * <li>{@code listDatabases}: one row per database.</li>
  * <li>Anything else: the reply document as a single row.</li>
@@ -74,8 +74,8 @@ final class CommandRunner
     static final Set<String> EXPLAINABLE = Set.of("find", "aggregate", "count", "distinct");
 
     /**
-     * Runs {@code { explain: command, verbosity }} for the plan buttons and returns the reply, or {@code null} when cancelled. An {@code explain}
-     * command written by hand is run with the requested verbosity instead of its own.
+     * Runs {@code { explain: command, verbosity }} for the plan buttons and returns the reply, or {@code null} when cancelled. An {@code explain} command written by hand is run with the requested
+     * verbosity instead of its own.
      */
     BsonDocument explain(Execution execution, MongoClient client, String database, ParsedCommand parsed, String verbosity, Deadline deadline)
     {
@@ -90,14 +90,13 @@ final class CommandRunner
     /** Runs the command and returns the number of rows published. */
     long run(Execution execution, MongoClient client, String database, ParsedCommand parsed, ResultSetWriter writer, Deadline deadline)
     {
-        return run(execution, client, database, parsed, writer, deadline, reply ->
+        return run(execution, client, database, parsed, writer, deadline, _ ->
         {
         });
     }
 
     /** Runs the command and returns the number of rows published; the reply of an {@code explain} command is also given to {@code explainReplies}. */
-    long run(Execution execution, MongoClient client, String database, ParsedCommand parsed, ResultSetWriter writer, Deadline deadline,
-            java.util.function.Consumer<BsonDocument> explainReplies)
+    long run(Execution execution, MongoClient client, String database, ParsedCommand parsed, ResultSetWriter writer, Deadline deadline, java.util.function.Consumer<BsonDocument> explainReplies)
     {
         BsonDocument command = parsed.command()
                 .clone();
@@ -130,9 +129,11 @@ final class CommandRunner
         {
             explainReplies.accept(reply);
         }
-        boolean empty = "distinct".equals(name) && reply.getArray("values", new BsonArray())
-                .isEmpty()
-                || "count".equals(name) && reply.get("n") instanceof BsonValue n
+        boolean empty = "distinct".equals(name)
+                && reply.getArray("values", new BsonArray())
+                        .isEmpty()
+                || "count".equals(name)
+                        && reply.get("n") instanceof BsonValue n
                         && n.isNumber()
                         && n.asNumber()
                                 .longValue() == 0;
@@ -176,8 +177,8 @@ final class CommandRunner
     private static final int SUGGESTION_MAX_DISTANCE = 2;
 
     /**
-     * MongoDB answers a read of a missing collection with an empty result, not an error, so a typo in the name looks like "no matches". After an empty result,
-     * warns when the collection does not exist, suggesting a close name. Costs one {@code listCollections}, and only on empty results.
+     * MongoDB answers a read of a missing collection with an empty result, not an error, so a typo in the name looks like "no matches". After an empty result, warns when the collection does not
+     * exist, suggesting a close name. Costs one {@code listCollections}, and only on empty results.
      */
     private void warnIfMissingCollection(Execution execution, MongoClient client, String database, ParsedCommand parsed)
     {
@@ -210,7 +211,11 @@ final class CommandRunner
                         .thenComparing(Comparator.naturalOrder()))
                 .map(name -> " Did you mean '" + name + "'?")
                 .orElse("");
-        String message = "Collection '" + collection + "' does not exist in database '" + database + "', so " + parsed.name()
+        String message = "Collection '" + collection
+                         + "' does not exist in database '"
+                         + database
+                         + "', so "
+                         + parsed.name()
                          + " returned nothing (MongoDB does not report missing collections as errors)."
                          + suggestion;
         execution.publisher()

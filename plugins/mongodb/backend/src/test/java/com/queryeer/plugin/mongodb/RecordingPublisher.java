@@ -29,7 +29,7 @@ final class RecordingPublisher implements QueryPublisher
     volatile Map<String, Object> errorDetails;
     volatile long completedRowCount = -1;
     private final CountDownLatch terminal = new CountDownLatch(1);
-    private volatile Consumer<List<List<Object>>> onRows = rows ->
+    private volatile Consumer<List<List<Object>>> onRows = _ ->
     {
     };
 

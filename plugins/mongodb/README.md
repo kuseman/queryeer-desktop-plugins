@@ -7,7 +7,7 @@ Native MongoDB query-engine support for Queryeer Desktop.
 The first-milestone design is agreed (see [Design](#design)).
 
 **Backend: implemented and tested.** This covers the engine, connections, query language, results, errors, cancellation, timeouts and packaging.
-- It is tested with unit tests, Testcontainers tests against `mongo:7.0`, and an end-to-end smoke test in Queryeer's real backend runner.
+- It is tested with unit tests, Testcontainers tests against MongoDB 7.0, 8.0 and 8.3, and an end-to-end smoke test in Queryeer's real backend runner.
 
 **Frontend: implemented and in use in the Queryeer app.** It covers:
 - the `.mongo` file type
@@ -229,12 +229,15 @@ A `.mongo` file holds statements in two forms, which can be mixed freely. Each s
 - The host's `options.timeoutMs` is enforced in two ways, and both report `TIMEOUT`:
   - The initial command uses the driver's client-side operation timeout (`timeoutMS`).
   - A watchdog fires at the deadline, reports `TIMEOUT` and stops the execution the same way cancel does. It is needed because the server rejects `maxTimeMS` on `getMore`, and a `getMore` without `batchSize` can fetch the rest of a cursor in one long call.
-- Minimum server version is MongoDB 4.4, because of `comment` on all commands, including `getMore`. The tests run against MongoDB 7.0.
+- Minimum server version is MongoDB 4.4, because of `comment` on all commands, including `getMore`. The tests run against MongoDB 7.0, 8.0 and 8.3.
 - The provider is thread-safe: each execution runs on its own host thread, and `invoke` and `cancel` may arrive concurrently.
 
 ### Testing
 
-- Backend: JUnit 5, plus Testcontainers (`mongo:7.0`) tests that are skipped when Docker is not available. The tests use a `RecordingPublisher`, modelled on the one in the JDBC engine's tests, and cover:
+- Backend: JUnit 5, plus Testcontainers tests that are skipped when Docker is not available.
+  - Server versions: the end-to-end tests are in the abstract `BaseMongoContainerTest`, and each supported version has a subclass that only names its image: `Mongo70ContainerTest` (`mongo:7.0.39`), `Mongo80ContainerTest` (`mongo:8.0.26`, long-term support) and `Mongo83ContainerTest` (`mongo:8.3.17`, latest). Adding a version is one small class. Images are pinned to exact versions, so a new server release cannot change a test run by itself.
+  - `ShellParserMongoshTest` runs on 7.0 only: it compares with mongosh, a client, so the server version does not matter.
+  - `ExplainGraphTest` uses explain replies captured from 8.3 (SBE plans) and 7.0 (the same aggregations as classic pipeline plans), so plan shapes of both are tested without Docker. The tests use a `RecordingPublisher`, modelled on the one in the JDBC engine's tests, and cover:
   - command parsing and positions
   - the allowlist, including `$out`/`$merge` anywhere
   - type mapping
