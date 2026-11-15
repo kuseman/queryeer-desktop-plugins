@@ -32,15 +32,21 @@ import com.mongodb.client.MongoDatabase;
 import com.queryeer.backend.api.ErrorMessages;
 import com.queryeer.backend.api.LargeValueStore;
 import com.queryeer.backend.api.LoggerService;
+import com.queryeer.backend.api.OutputEvent;
+import com.queryeer.backend.api.OutputSeverity;
 import com.queryeer.backend.api.QueryEngineProvider;
 import com.queryeer.backend.api.QueryPublisher;
 import com.queryeer.backend.api.SecuritySessionClosedException;
 import com.queryeer.backend.contract.query.QueryExecuteOptions;
+import com.queryeer.backend.contract.query.QueryOutputArtifact;
 
 /** The {@code mongodb} query engine. Thread-safe: executions run on host threads, and {@code invoke}/{@code cancel} may arrive concurrently. */
 final class MongoQueryEngineProvider implements QueryEngineProvider
 {
     static final String ACTION_DATABASES = "mongodb.databases";
+    /** Execution intents the host's plan support uses (QueryExecuteOptions.intent). */
+    static final String INTENT_ESTIMATED_PLAN = "plan.estimated";
+    static final String INTENT_ACTUAL_PLAN = "plan.actual";
     static final String ACTION_PING = "mongodb.ping";
     static final String ACTION_TEST_CONNECTION = "mongodb.testConnection";
     static final String ACTION_COLLECTIONS = "mongodb.collections";
@@ -124,8 +130,17 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
             execution.useClient(handle.client());
 
             CommandRunner.Deadline deadline = CommandRunner.Deadline.in(timeoutMs);
+            String intent = options == null ? null
+                    : options.intent();
+            if (INTENT_ESTIMATED_PLAN.equals(intent)
+                    || INTENT_ACTUAL_PLAN.equals(intent))
+            {
+                runPlans(execution, handle, state, commands, INTENT_ACTUAL_PLAN.equals(intent), deadline, start, new ValueMapper(largeValues, queryExecutionId));
+                return;
+            }
             ValueMapper values = new ValueMapper(largeValues, queryExecutionId);
             long rowCount = 0;
+            List<QueryOutputArtifact> plans = new ArrayList<>();
             for (ParsedCommand command : commands)
             {
                 if (execution.isCancelled())
@@ -133,11 +148,20 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
                     return;
                 }
                 String database = resolveDatabase(command, state, handle.settings());
-                rowCount += runner.run(execution, handle.client(), database, command, new ResultSetWriter(publisher, values), deadline);
+                // An explain written by hand shows its reply as rows, and as a plan graph in the Plan output
+                rowCount += runner.run(execution, handle.client(), database, command, new ResultSetWriter(publisher, values), deadline,
+                        reply -> plans.add(planArtifact(reply, plans.size() + 1, "Query plan", command)));
             }
             if (!execution.isCancelled())
             {
-                publisher.completed(System.currentTimeMillis() - start, rowCount);
+                if (plans.isEmpty())
+                {
+                    publisher.completed(System.currentTimeMillis() - start, rowCount);
+                }
+                else
+                {
+                    publisher.completed(System.currentTimeMillis() - start, rowCount, List.of("rows", "plan"), plans, null);
+                }
             }
         }
         catch (QueryValidationException e)
@@ -693,6 +717,95 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
             return new java.math.BigDecimal(x).compareTo(new java.math.BigDecimal(y));
         }
         return x.compareTo(y);
+    }
+
+    /**
+     * The Estimated Plan / Actual Plan buttons: each statement is explained instead of run ({@code queryPlanner}, or {@code executionStats}, which
+     * runs the query on the server but returns only the plan with its counts), and its plan goes to the Plan output as a graph. The explain reply
+     * itself is also a result row, like a hand-written explain, to read or copy as JSON (the host still opens the Plan output). Statements that
+     * have no plan are listed in the output.
+     */
+    private void runPlans(Execution execution, MongoClientCache.Handle handle, Map<?, ?> state, List<ParsedCommand> commands, boolean actual, CommandRunner.Deadline deadline,
+            long start, ValueMapper values)
+    {
+        GuardedPublisher publisher = execution.publisher();
+        String verbosity = actual ? "executionStats"
+                : "queryPlanner";
+        String title = actual ? "Actual plan"
+                : "Estimated plan";
+        List<QueryOutputArtifact> plans = new ArrayList<>();
+        List<OutputEvent> notes = new ArrayList<>();
+        for (ParsedCommand command : commands)
+        {
+            if (execution.isCancelled())
+            {
+                return;
+            }
+            String name = explainedName(command);
+            if (!CommandRunner.EXPLAINABLE.contains(name))
+            {
+                notes.add(new OutputEvent(OutputSeverity.INFO, "Line " + command.line() + ": " + name
+                                                               + " has no query plan. Plans are shown for find, aggregate, count and distinct."));
+                continue;
+            }
+            BsonDocument reply = runner.explain(execution, handle.client(), resolveDatabase(command, state, handle.settings()), command, verbosity, deadline);
+            if (reply == null)
+            {
+                return;
+            }
+            plans.add(planArtifact(reply, plans.size() + 1, title, command));
+            ResultSetWriter writer = new ResultSetWriter(publisher, values);
+            List<BsonDocument> rows = List.of(CommandRunner.replyRow(reply));
+            writer.start(rows, false);
+            writer.write(rows);
+        }
+        if (!notes.isEmpty())
+        {
+            publisher.resultSetRows(List.of(), notes);
+        }
+        if (execution.isCancelled())
+        {
+            return;
+        }
+        long duration = System.currentTimeMillis() - start;
+        if (plans.isEmpty())
+        {
+            publisher.completed(duration, 0);
+        }
+        else
+        {
+            publisher.completed(duration, plans.size(), List.of("rows", "plan"), plans, null);
+        }
+    }
+
+    /** The command an {@code explain} is about, or the command itself. */
+    private static String explainedName(ParsedCommand command)
+    {
+        if ("explain".equals(command.name())
+                && command.command()
+                        .get("explain") instanceof BsonDocument inner
+                && !inner.isEmpty())
+        {
+            return inner.getFirstKey();
+        }
+        return command.name();
+    }
+
+    private static QueryOutputArtifact planArtifact(BsonDocument explainReply, int index, String prefix, ParsedCommand command)
+    {
+        BsonDocument subject = "explain".equals(command.name())
+                && command.command()
+                        .get("explain") instanceof BsonDocument inner ? inner
+                                : command.command();
+        String name = subject.isEmpty() ? "command"
+                : subject.getFirstKey();
+        BsonValue target = subject.get(name);
+        String title = prefix + ": " + name + (target != null
+                && target.isString() ? " " + target.asString()
+                        .getValue()
+                        : "");
+        String id = "mongodb-plan-" + index;
+        return new QueryOutputArtifact(id, "plan", "graph", title, ExplainGraph.convert(explainReply, id, title));
     }
 
     private static String requiredText(Map<?, ?> payload, String key)

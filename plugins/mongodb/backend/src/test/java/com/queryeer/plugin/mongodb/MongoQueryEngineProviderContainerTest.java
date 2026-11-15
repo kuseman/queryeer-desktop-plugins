@@ -736,6 +736,145 @@ class MongoQueryEngineProviderContainerTest
         return publisher;
     }
 
+    private RecordingPublisher plan(String text, String intent)
+    {
+        RecordingPublisher publisher = new RecordingPublisher();
+        provider.execute("qx-" + System.nanoTime(), "file-1", text, local(), new QueryExecuteOptions(null, null, intent, null, null), publisher);
+        return publisher;
+    }
+
+    private static com.queryeer.backend.contract.graph.GraphVertex vertex(com.queryeer.backend.contract.graph.GraphDocument graph, String label)
+    {
+        return graph.vertices()
+                .stream()
+                .filter(v -> label.equals(v.label()))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError(label + " not in " + graph.vertices()
+                        .stream()
+                        .map(com.queryeer.backend.contract.graph.GraphVertex::label)
+                        .toList()));
+    }
+
+    private static Object property(com.queryeer.backend.contract.graph.GraphVertex vertex, String id)
+    {
+        return vertex.properties()
+                .stream()
+                .flatMap(group -> group.properties()
+                        .stream())
+                .filter(p -> id.equals(p.id()))
+                .map(com.queryeer.backend.contract.graph.GraphProperty::value)
+                .findFirst()
+                .orElse(null);
+    }
+
+    @Test
+    void estimatedPlanShowsTheWinningPlanWithoutRunningTheQuery()
+    {
+        RecordingPublisher publisher = plan("""
+                db.orders.find({ status: 'open' }).sort({ total: -1 })
+                { "listIndexes": "orders" }
+                db.orders.find({ _id: 2 })
+                """, "plan.estimated");
+
+        assertEquals(List.of("completed"), publisher.terminalEvents, String.valueOf(publisher.errorMessage));
+        assertEquals(List.of("rows", "plan"), publisher.features);
+        assertEquals(2, publisher.artifacts.size(), "one plan per explainable statement");
+        assertEquals(2, publisher.resultSets.size(), "each explain reply as a row, as JSON to read or copy");
+        assertTrue(publisher.resultSets.get(0)
+                .columns()
+                .contains("queryPlanner"));
+        assertFalse(publisher.resultSets.get(0)
+                .columns()
+                .contains("executionStats"), "the query is not run");
+        assertFalse(publisher.resultSets.get(0)
+                .columns()
+                .contains("ok"));
+        assertEquals("Estimated plan: find orders", publisher.artifacts.get(0)
+                .title());
+        assertEquals("plan", publisher.artifacts.get(0)
+                .capability());
+
+        var graph = publisher.artifacts.get(0)
+                .graph();
+        var scan = vertex(graph, "COLLSCAN");
+        assertEquals("collscan", scan.overlays()
+                .get(0)
+                .id(), "a collection scan is flagged");
+        assertEquals("#7f1d1d", scan.style()
+                .backgroundColor());
+        var sort = vertex(graph, "SORT");
+        assertEquals(1, graph.edges()
+                .stream()
+                .filter(e -> e.sourceVertexId()
+                        .equals(scan.id())
+                        && e.targetVertexId()
+                                .equals(sort.id()))
+                .count(), "data flows from the scan to the sort");
+        assertTrue(graph.description()
+                .startsWith("Estimated: the query was not run"), graph.description());
+
+        assertTrue(publisher.messages.stream()
+                .anyMatch(m -> m.message()
+                        .equals("Line 2: listIndexes has no query plan. Plans are shown for find, aggregate, count and distinct.")), publisher.messages.toString());
+    }
+
+    @Test
+    void actualPlanAddsWhatEachStageDid()
+    {
+        RecordingPublisher publisher = plan("""
+                db.orders.find({ status: 'open' })
+                db.orders.aggregate([{ $match: { total: { $gte: 20 } } }, { $group: { _id: '$status', n: { $sum: 1 } } }, { $sort: { n: -1 } }])
+                db.orders.countDocuments({ status: 'closed' })
+                """, "plan.actual");
+
+        assertEquals(List.of("completed"), publisher.terminalEvents, String.valueOf(publisher.errorMessage));
+        assertEquals(3, publisher.artifacts.size());
+        assertTrue(publisher.resultSets.get(0)
+                .columns()
+                .contains("executionStats"));
+        var find = publisher.artifacts.get(0)
+                .graph();
+        assertEquals("Actual plan: find orders", publisher.artifacts.get(0)
+                .title());
+        var scan = vertex(find, "COLLSCAN");
+        assertEquals(3L, property(scan, "returned"));
+        assertEquals(5L, property(scan, "docsExamined"));
+        assertTrue(find.description()
+                .startsWith("Returned 3 · examined 5 documents and 0 index keys"), find.description());
+
+        var aggregate = publisher.artifacts.get(1)
+                .graph();
+        assertTrue(aggregate.vertices()
+                .stream()
+                .anyMatch(v -> v.label()
+                        .equals("COLLSCAN")), "the aggregation's scan: " + aggregate.vertices());
+        assertTrue(aggregate.vertices()
+                .stream()
+                .anyMatch(v -> v.label()
+                        .equals("GROUP")
+                        || v.label()
+                                .equals("$group")), "the $group, pushed down or not: " + aggregate.vertices());
+        assertTrue(aggregate.description()
+                .contains("examined 5 documents"), aggregate.description());
+
+        assertEquals("Actual plan: count orders", publisher.artifacts.get(2)
+                .title());
+    }
+
+    @Test
+    void anExplainWrittenByHandShowsRowsAndAPlan()
+    {
+        RecordingPublisher publisher = execute("db.orders.find({ status: 'open' }).explain('executionStats')", local());
+
+        assertEquals(List.of("completed"), publisher.terminalEvents, String.valueOf(publisher.errorMessage));
+        assertEquals(List.of("rows", "plan"), publisher.features);
+        assertEquals(1, publisher.resultSets.size(), "the explain reply as a row, as before");
+        assertEquals("Query plan: find orders", publisher.artifacts.get(0)
+                .title());
+        assertEquals(5L, property(vertex(publisher.artifacts.get(0)
+                .graph(), "COLLSCAN"), "docsExamined"));
+    }
+
     private static Map<String, Object> local()
     {
         return Map.of("connectionId", "local");
