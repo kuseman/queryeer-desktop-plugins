@@ -79,11 +79,21 @@ abstract class BaseMongoContainerTest
     {
         assumeTrue(DockerClientFactory.instance()
                 .isDockerAvailable(), "Docker is not available");
+        // The server's own output is the only way to tell why a start failed on CI. Testcontainers removes a container that fails to start, so collect it as it runs
+        StringBuffer log = new StringBuffer();
         // An open port is not enough: wait until mongod says it accepts connections, as Testcontainers' MongoDB module does
         mongo = new GenericContainer<>(DockerImageName.parse(image)).withExposedPorts(27017)
+                .withLogConsumer(frame -> log.append(frame.getUtf8String()))
                 .waitingFor(Wait.forLogMessage("(?i).*waiting for connections.*", 1)
                         .withStartupTimeout(Duration.ofMinutes(2)));
-        mongo.start();
+        try
+        {
+            mongo.start();
+        }
+        catch (RuntimeException e)
+        {
+            throw new IllegalStateException(image + " did not start. Container log:\n" + log, e);
+        }
         hosts = mongo.getHost() + ":" + mongo.getMappedPort(27017);
         seedClient = MongoClients.create("mongodb://" + hosts);
         try
@@ -93,8 +103,7 @@ abstract class BaseMongoContainerTest
         }
         catch (MongoException e)
         {
-            // Without the server's own log a failed start on CI cannot be told apart from a network problem
-            throw new IllegalStateException(image + " does not answer at " + hosts + " (container running: " + mongo.isRunning() + "). Container log:\n" + mongo.getLogs(), e);
+            throw new IllegalStateException(image + " does not answer at " + hosts + " (container running: " + mongo.isRunning() + "). Container log:\n" + log, e);
         }
 
         seedClient.getDatabase("shop")
