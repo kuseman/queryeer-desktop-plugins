@@ -28,7 +28,14 @@ import { isReuseClick, reuseModifierLabel, runGeneratedQuery } from "./queryFile
 
 export type IndexInfo = { name: string; key: string; unique: boolean };
 /** A sampled field. Fields one level down in an embedded document have the full path as `name` and their parent's name as `parent`. */
-export type FieldInfo = { name: string; types: string[]; count: number; sampled: number; parent?: string };
+/** `elementTypes` are the types found inside sampled arrays, when the field holds arrays. */
+export type FieldInfo = { name: string; types: string[]; elementTypes?: string[]; count: number; sampled: number; parent?: string };
+
+/** The sampled types for display, an array as `array of int` when its elements were sampled. */
+export function describeTypes(field: Pick<FieldInfo, "types" | "elementTypes">): string {
+  const elements = field.elementTypes?.length ? ` of ${field.elementTypes.join(" | ")}` : "";
+  return field.types.map((type) => (type === "array" ? `array${elements}` : type)).join(" | ");
+}
 /** A distinct value of a field, `type` being its `$type` name. */
 export type ValueSuggestion = { type: string; text: string };
 /** A field's values for suggestions; `sampled` is the sample size when they come from a random sample of a large collection. */
@@ -301,10 +308,10 @@ export function MongoExplorer({ context, connectionId, databases }: {
     return (
       <div key={field.name} role={children.length > 0 ? "treeitem" : undefined} aria-expanded={children.length > 0 ? open : undefined}>
         <div className={`qmongo-tree-row${children.length > 0 ? "" : " qmongo-tree-leaf-row"}`}
-          title={`${field.name}: ${field.types.join(" | ")}${presence ? ` (in ${presence} of ${field.sampled} sampled documents)` : ""}`}>
+          title={`${field.name}: ${describeTypes(field)}${presence ? ` (in ${presence} of ${field.sampled} sampled documents)` : ""}`}>
           {children.length > 0 && toggleButton(childrenKey, open, field.name)}
           <span className="qmongo-tree-label">{label}</span>
-          <span className="qmongo-tree-type">{field.types.join(" | ")}</span>
+          <span className="qmongo-tree-type">{describeTypes(field)}</span>
           {presence && <span className="qmongo-tree-count">{presence}</span>}
           <button type="button" className="qmongo-tree-action" title="Actions" aria-expanded={menuFor === fieldKey}
             onClick={() => setMenuFor(menuFor === fieldKey ? undefined : fieldKey)}>⋯</button>
