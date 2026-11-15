@@ -1,10 +1,12 @@
 name: MongoDB plugin
 
-# Builds and tests only when the MongoDB plugin or something it is built with changes
+# Builds and tests only when the MongoDB plugin or something it is built with changes.
+# Pushes run on master only: a branch with an open pull request is tested by the pull_request run,
+# and a branch without one can be run by hand (workflow_dispatch)
 on:
   push:
     branches:
-      - "**"
+      - master
     paths: &paths
       - "plugins/mongodb/**"
       - "shared/**"
