@@ -133,7 +133,7 @@ final class ExplainGraph
         }
 
         finishVertices();
-        return new GraphDocument(graphId, title, summary(queryPlanner, executionStats), layout(), vertices, edges);
+        return new GraphDocument(graphId, title, summary(queryPlanner, executionStats, laterStages), layout(), vertices, edges);
     }
 
     /** Adds the stage and its inputs; returns its vertex id. */
@@ -162,13 +162,35 @@ final class ExplainGraph
                 .findFirst()
                 .orElse("stage");
         String id = "s" + (++counter);
-        Stats stats = new Stats(number(stage, "nReturned"), null, null, number(stage, "executionTimeMillisEstimate"));
+        // A classic $lookup (MongoDB 7.0 runs most of them outside the query engine) reports the reads of its joined collection here
+        Stats stats = new Stats(number(stage, "nReturned"), number(stage, "totalDocsExamined"), number(stage, "totalKeysExamined"), number(stage,
+                "executionTimeMillisEstimate"));
         List<GraphPropertyGroup> groups = new ArrayList<>();
         List<GraphProperty> details = new ArrayList<>();
         add(details, "spec", "Stage", json(stage.get(name)), false);
+        BsonArray indexesUsed = stage.getArray("indexesUsed", null);
+        if (indexesUsed != null
+                && !indexesUsed.isEmpty())
+        {
+            add(details, "index", "Indexes used", String.join(", ", indexesUsed.stream()
+                    .filter(BsonValue::isString)
+                    .map(value -> value.asString()
+                            .getValue())
+                    .toList()), true);
+        }
         addGroup(groups, "details", "Details", details);
         addGroup(groups, "execution", "Execution", execution(stats));
-        drafts.add(new Draft(id, name, abbreviate(json(stage.get(name)), 80), groups, List.of(), stats));
+        List<GraphVertexOverlay> overlays = overlays(name, stage);
+        Long collectionScans = number(stage, "collectionScans");
+        if (collectionScans != null
+                && collectionScans > 0)
+        {
+            overlays.add(0, new GraphVertexOverlay("collscan", "warning", "Collection scan", "Scanned the joined collection " + format(collectionScans)
+                                                                                             + (collectionScans == 1 ? " time" : " times")
+                                                                                             + ": no index supports the join",
+                    null));
+        }
+        drafts.add(new Draft(id, name, abbreviate(json(stage.get(name)), 80), groups, overlays, stats));
         edges.add(edge(inputId, id, stageStats(inputId)));
         return id;
     }
@@ -434,7 +456,10 @@ final class ExplainGraph
                 description = (description.isEmpty() ? ""
                         : description + " · ") + Math.round(share) + "% of examined";
             }
-            vertices.add(new GraphVertex(draft.id(), draft.stage(), kind(draft.stage()), description, style("COLLSCAN".equals(draft.stage()) ? Math.max(share, 50)
+            boolean collectionScan = draft.overlays()
+                    .stream()
+                    .anyMatch(overlay -> "collscan".equals(overlay.id()));
+            vertices.add(new GraphVertex(draft.id(), draft.stage(), kind(draft.stage()), description, style(collectionScan ? Math.max(share, 50)
                     : share), draft.groups(), draft.overlays(), List.of()));
         }
     }
@@ -451,7 +476,8 @@ final class ExplainGraph
                 List.of());
     }
 
-    private static String summary(BsonDocument queryPlanner, BsonDocument executionStats)
+    /** The run's totals: what the last stage returned, and the reads of the query and of later stages that read too (a classic $lookup). */
+    private static String summary(BsonDocument queryPlanner, BsonDocument executionStats, List<BsonDocument> laterStages)
     {
         List<String> parts = new ArrayList<>();
         if (executionStats != null)
@@ -459,6 +485,14 @@ final class ExplainGraph
             Long returned = number(executionStats, "nReturned");
             Long docs = number(executionStats, "totalDocsExamined");
             Long keys = number(executionStats, "totalKeysExamined");
+            for (BsonDocument stage : laterStages)
+            {
+                Long stageReturned = number(stage, "nReturned");
+                returned = stageReturned != null ? stageReturned
+                        : returned;
+                docs = sum(docs, number(stage, "totalDocsExamined"));
+                keys = sum(keys, number(stage, "totalKeysExamined"));
+            }
             Long millis = number(executionStats, "executionTimeMillis");
             if (returned != null)
             {

@@ -1,0 +1,122 @@
+{
+  "explainVersion": "1",
+  "stages": [
+    {
+      "$cursor": {
+        "queryPlanner": {
+          "namespace": "qmongo_showcase.orders",
+          "indexFilterSet": false,
+          "parsedQuery": {
+            "status": {
+              "$eq": "paid"
+            }
+          },
+          "queryHash": "4B6FAB47",
+          "planCacheKey": "B1FB8012",
+          "optimizationTimeMillis": 0,
+          "maxIndexedOrSolutionsReached": false,
+          "maxIndexedAndSolutionsReached": false,
+          "maxScansToExplodeReached": false,
+          "winningPlan": {
+            "stage": "FETCH",
+            "inputStage": {
+              "stage": "IXSCAN",
+              "keyPattern": {
+                "status": 1
+              },
+              "indexName": "open_status_partial",
+              "isMultiKey": false,
+              "multiKeyPaths": {
+                "status": []
+              },
+              "isUnique": false,
+              "isSparse": false,
+              "isPartial": true,
+              "indexVersion": 2,
+              "direction": "forward",
+              "indexBounds": {
+                "status": [
+                  "[\"paid\", \"paid\"]"
+                ]
+              }
+            }
+          },
+          "rejectedPlans": []
+        },
+        "executionStats": {
+          "executionSuccess": true,
+          "nReturned": 400,
+          "executionTimeMillis": 11,
+          "totalKeysExamined": 400,
+          "totalDocsExamined": 400,
+          "executionStages": {
+            "stage": "FETCH",
+            "nReturned": 400,
+            "executionTimeMillisEstimate": 0,
+            "works": 401,
+            "advanced": 400,
+            "needTime": 0,
+            "needYield": 0,
+            "saveState": 1,
+            "restoreState": 1,
+            "isEOF": 1,
+            "docsExamined": 400,
+            "alreadyHasObj": 0,
+            "inputStage": {
+              "stage": "IXSCAN",
+              "nReturned": 400,
+              "executionTimeMillisEstimate": 0,
+              "works": 401,
+              "advanced": 400,
+              "needTime": 0,
+              "needYield": 0,
+              "saveState": 1,
+              "restoreState": 1,
+              "isEOF": 1,
+              "keyPattern": {
+                "status": 1
+              },
+              "indexName": "open_status_partial",
+              "isMultiKey": false,
+              "multiKeyPaths": {
+                "status": []
+              },
+              "isUnique": false,
+              "isSparse": false,
+              "isPartial": true,
+              "indexVersion": 2,
+              "direction": "forward",
+              "indexBounds": {
+                "status": [
+                  "[\"paid\", \"paid\"]"
+                ]
+              },
+              "keysExamined": 400,
+              "seeks": 1,
+              "dupsTested": 0,
+              "dupsDropped": 0
+            }
+          }
+        }
+      },
+      "nReturned": 400,
+      "executionTimeMillisEstimate": 0
+    },
+    {
+      "$lookup": {
+        "from": "customers",
+        "as": "c",
+        "localField": "customerId",
+        "foreignField": "_id"
+      },
+      "totalDocsExamined": 400,
+      "totalKeysExamined": 400,
+      "collectionScans": 0,
+      "indexesUsed": [
+        "_id_"
+      ],
+      "nReturned": 400,
+      "executionTimeMillisEstimate": 12
+    }
+  ]
+}

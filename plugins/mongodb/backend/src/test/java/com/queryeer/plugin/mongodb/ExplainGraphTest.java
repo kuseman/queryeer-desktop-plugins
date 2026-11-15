@@ -16,8 +16,9 @@ import com.queryeer.backend.contract.graph.GraphProperty;
 import com.queryeer.backend.contract.graph.GraphVertex;
 
 /**
- * Explain replies captured from MongoDB 8.3 on the synthetic showcase database (scripts/seed-showcase.js), including slot-based (SBE) plans,
- * whose counts sit on low-level engine stages and are mapped onto the readable stages by planNodeId.
+ * Explain replies captured on the synthetic showcase database (scripts/seed-showcase.js). From MongoDB 8.3: slot-based (SBE) plans, whose counts
+ * sit on low-level engine stages and are mapped onto the readable stages by planNodeId. From MongoDB 7.0 (the {@code 70} fixtures): the same
+ * aggregations as classic plans, with $group and $lookup as pipeline stages after $cursor, a $lookup reporting the reads of its joined collection.
  */
 class ExplainGraphTest
 {
@@ -133,6 +134,56 @@ class ExplainGraphTest
         assertEquals(800L, total(graph, "keysExamined"));
         assertEquals(400L, property(lookup, "docsExamined"));
         assertEquals(400L, property(lookup, "keysExamined"));
+    }
+
+    @Test
+    void classicPipelineStagesFollowTheCursorAndTheSummaryGivesWhatTheLastReturned() throws IOException
+    {
+        GraphDocument graph = graph("classicGroupSort70");
+
+        assertEquals(List.of("PROJECTION_SIMPLE", "FETCH", "IXSCAN", "$group", "$sort"), labels(graph));
+        assertEquals("$group", consumerOf(graph, vertex(graph, "PROJECTION_SIMPLE")));
+        assertEquals("$sort", consumerOf(graph, vertex(graph, "$group")));
+        assertEquals(74L, property(vertex(graph, "$group"), "returned"));
+        assertTrue(graph.description()
+                .startsWith("Returned 74 · examined 400 documents and 400 index keys"), "the groups, not the documents fed to $group: " + graph.description());
+    }
+
+    @Test
+    void classicLookupCountsTheReadsOfItsJoinedCollection() throws IOException
+    {
+        GraphDocument graph = graph("classicLookup70");
+
+        GraphVertex lookup = vertex(graph, "$lookup");
+        assertEquals(400L, property(lookup, "docsExamined"));
+        assertEquals(400L, property(lookup, "keysExamined"));
+        assertEquals("_id_", property(lookup, "index"));
+        assertEquals(List.of(), lookup.overlays());
+        assertEquals(800L, total(graph, "docsExamined"), "the same totals as the single SBE plan on 8.3");
+        assertEquals(800L, total(graph, "keysExamined"));
+        assertTrue(graph.description()
+                .startsWith("Returned 400 · examined 800 documents and 800 index keys"), graph.description());
+    }
+
+    @Test
+    void classicLookupWithoutAnIndexIsFlaggedAsACollectionScan() throws IOException
+    {
+        GraphDocument graph = graph("classicLookupCollscan70");
+
+        GraphVertex lookup = vertex(graph, "$lookup");
+        assertEquals("collscan", lookup.overlays()
+                .get(0)
+                .id());
+        assertTrue(lookup.overlays()
+                .get(0)
+                .title()
+                .contains("85 times"), lookup.overlays()
+                        .get(0)
+                        .title());
+        assertEquals(680L, property(lookup, "docsExamined"));
+        assertEquals(vertex(graph, "COLLSCAN").style(), lookup.style(), "marked like a collection scan in the query itself");
+        assertTrue(graph.description()
+                .startsWith("Returned 85 · examined 1,080 documents and 0 index keys"), graph.description());
     }
 
     @Test
