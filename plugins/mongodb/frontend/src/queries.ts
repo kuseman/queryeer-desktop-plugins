@@ -86,11 +86,14 @@ export function commandText(command: Record<string, unknown>): string {
   return `${JSON.stringify(command, null, 2)}\n`;
 }
 
-export type TemplateKind = "find" | "aggregate" | "count" | "distinct";
+export type TemplateKind = "find" | "elemMatch" | "aggregate" | "count" | "distinct";
+
+const ELEM_MATCH_TITLE = "Documents with one array element matching every condition. Separate conditions on array fields may each match a different element";
 
 /** Starting points for hand-written commands, with every common option present so it only needs editing, not looking up. */
 export const TEMPLATES: ReadonlyArray<{ id: TemplateKind; label: string; title: string }> = [
   { id: "find", label: "find", title: "Filter, projection, sort, skip and limit" },
+  { id: "elemMatch", label: "find with $elemMatch", title: ELEM_MATCH_TITLE },
   { id: "aggregate", label: "aggregate", title: "A pipeline: $match, $group, $sort, $limit" },
   { id: "count", label: "count", title: "Count the documents matching a query" },
   { id: "distinct", label: "distinct", title: "The distinct values of a field" }
@@ -99,6 +102,7 @@ export const TEMPLATES: ReadonlyArray<{ id: TemplateKind; label: string; title: 
 /** The same templates as mongosh statements. Each one runs exactly as its JSON twin (the backend's ShellParserTest checks these texts). */
 export const SHELL_TEMPLATES: ReadonlyArray<{ id: TemplateKind; label: string; title: string }> = [
   { id: "find", label: "find", title: "find(filter, projection) with sort, skip and limit" },
+  { id: "elemMatch", label: "find with $elemMatch", title: ELEM_MATCH_TITLE },
   { id: "aggregate", label: "aggregate", title: "A pipeline: $match, $group, $sort, $limit" },
   { id: "count", label: "countDocuments", title: "Count the documents matching a filter" },
   { id: "distinct", label: "distinct", title: "The distinct values of a field" }
@@ -118,6 +122,8 @@ export function shellTemplateText(kind: TemplateKind, collection: string): strin
   switch (kind) {
     case "find":
       return `${target}.find({}, {}).sort({ _id: 1 }).skip(0).limit(${BROWSE_LIMIT})\n`;
+    case "elemMatch":
+      return `${target}.find({ array: { $elemMatch: { field: "value", flag: true } } }).limit(${BROWSE_LIMIT})\n`;
     case "aggregate":
       return [
         `${target}.aggregate([`,
@@ -141,6 +147,8 @@ export function templateCommand(kind: TemplateKind, collection: string): Record<
   switch (kind) {
     case "find":
       return { find: name, filter: {}, projection: {}, sort: { _id: 1 }, skip: 0, limit: BROWSE_LIMIT };
+    case "elemMatch":
+      return { find: name, filter: { array: { $elemMatch: { field: "value", flag: true } } }, limit: BROWSE_LIMIT };
     case "aggregate":
       return {
         aggregate: name,

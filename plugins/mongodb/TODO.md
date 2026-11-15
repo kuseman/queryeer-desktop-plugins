@@ -64,7 +64,11 @@ Redesigned 2026-11-13. Plain Filter/Projection/Sort text fields duplicated the e
   - A list under the value input when the field has at most 50 distinct values. For lists, each suggestion adds one more value to what is typed.
   - Collections up to 100,000 documents are read in full ($group, 2 s limit). Larger ones read a random sample of 1,000 documents, because a full scan rarely finishes in time; the row then says so in visible text ("Other values may exist"). Views and time-series collections are always read in full.
   - Not for `_id`, dates, ObjectIds, or contains / starts with / regex
-- [ ] Later, maybe: embedded fields inside arrays (`items.sku`) and more than one level down
+- [x] Array fields: conditions are typed from the sampled element types (`categoryIds = 181` compares numbers)
+- [ ] Later, maybe: embedded fields inside arrays (`items.sku`) and more than one level down. Waiting, to keep the bar uncluttered (2026-11-15):
+  - Conditions on fields of the same array element need one `$elemMatch`; separate conditions may each match a different element (seen on real data: `activation` arrays with `salesBrand`/`market`/`active`). The bar would group such conditions into one `$elemMatch`, labelled as matching the same element.
+  - Sampling would go a few levels deep through documents and arrays of documents, capped; value suggestions would unwind each array on the path.
+  - Until then: the "find with $elemMatch" template, JSON and shell
 - [ ] Later, maybe: read hand-written finds back into the bar (needs a value parser)
 - [x] Verified in Queryeer (2026-11-14): query bar and collection combobox
 

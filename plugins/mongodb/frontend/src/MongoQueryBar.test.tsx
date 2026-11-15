@@ -310,16 +310,16 @@ describe("MongoQueryBar", () => {
     const items = (group: string) => Array.from(document.body.querySelectorAll<HTMLButtonElement>(
       `[role="menu"][aria-label="Templates"] [role="group"][aria-label="${group}"] [role="menuitem"]`));
     const names = (group: string) => items(group).map((item) => item.querySelector(".qmongo-qb-item-name")?.textContent);
-    expect(names("JSON command")).toEqual(["find", "aggregate", "count", "distinct"]);
-    expect(names("Shell (mongosh)")).toEqual(["find", "aggregate", "countDocuments", "distinct"]);
-    await click(items("JSON command")[2]);
+    expect(names("JSON command")).toEqual(["find", "find with $elemMatch", "aggregate", "count", "distinct"]);
+    expect(names("Shell (mongosh)")).toEqual(["find", "find with $elemMatch", "aggregate", "countDocuments", "distinct"]);
+    await click(items("JSON command")[3]);
     expect(JSON.parse(editor.text())).toEqual({ count: "orders", query: {} });
     expect(executeCommand).not.toHaveBeenCalled();
     expect(container.textContent).toContain("Edited by hand");
 
     // Templates stay available while the bar is off, also in shell form
     await click(chip("Templates"));
-    await click(items("Shell (mongosh)")[2]);
+    await click(items("Shell (mongosh)")[3]);
     expect(editor.text()).toBe("db.orders.countDocuments({})\n");
   });
 
