@@ -7,3 +7,12 @@ node_modules/
 .vscode/
 *.iml
 *.swp
+
+# Eclipse / STS
+.project
+.classpath
+.settings/
+.factorypath
+.checkstyle
+.apt_generated/
+bin/
