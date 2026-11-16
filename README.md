@@ -46,7 +46,7 @@ The vendored schema in `shared/schema/` must be refreshed whenever Queryeer chan
      - it sets the version in `plugin.json`, the backend `pom.xml` and the frontend `package.json` ([plugin-version.mjs](shared/scripts/plugin-version.mjs))
      - it commits `release(<plugin>): v<version>` and pushes the tag `<plugin>/v<version>`
      - A plugin's first release uses the version already in its `plugin.json`.
-     - There is no `-SNAPSHOT` in between releases: the version stays at the last release, and the changelog lists newer commits as the next one.
+     - There is no `-SNAPSHOT` in between releases: the version stays at the last release, and the changelog lists newer commits as the next one. That holds only while releases publish nothing but the ZIP. A plugin that starts publishing to Maven needs core's "prepare for next development iteration" step for its `pom.xml`, so builds between releases never carry a version that is already published.
   2. **Release Plugin** ([release-plugin.yml](.github/workflows/release-plugin.yml), started by the tag):
      - checks that the tag matches the committed version
      - tests, packages and verifies that plugin only
