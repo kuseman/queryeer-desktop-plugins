@@ -2,7 +2,7 @@
 
 Things found while building plugins in this repository that a third-party plugin cannot do, or can only do by copying host internals. Each entry says what is missing, where the host has it internally, what this repo does instead, and a suggested fix.
 
-Found while building: MongoDB (`plugins/mongodb`). Last updated: 2026-11-14. References are to the Queryeer Desktop repository at commit `52bc815`.
+Found while building: MongoDB (`plugins/mongodb`). Last updated: 2026-11-16. References are to the Queryeer Desktop repository at commit `52bc815`.
 
 Priority:
 - **P1**: a real plugin needs it or has to duplicate meaningful code.
@@ -38,6 +38,7 @@ Priority:
 | F22 Warning on a successful query stays behind the grid | P2 | Open |
 | F23 Plugins cannot store a secret | P3 | Open |
 | F24 `@outline-pattern` only works for core's own text types | P2 | Open |
+| F25 No charts or live dashboards | P2 | Open (needs design): proposal in [`specs/core-timeseries.md`](specs/core-timeseries.md) |
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
@@ -258,6 +259,21 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Use case:** `.mongo` files: `// @outline-pattern: /\/\/##(.*)/` with `//## Section` comments, as users do in SQL files with `--`. The directive syntax already accepts `//`.
 - **Suggestion:** register the custom-pattern provider for every MIME type whose content category is `"text"` (including ones registered later by plugins), and let `hasProvider` (or the capability) count supplementary providers too. Alternatively export the provider through the API so plugins can register it for their types.
 - **Plugin side meanwhile:** MongoDB registers its own main outline (one entry per statement), as core does for JSON and SQL. That satisfies the `hasProvider` check, so only the first part is left.
+
+### F25 (P2): No charts or live dashboards
+- **Missing:** any way for a plugin to show values over time. Core has no chart component: `core.graph` draws node-and-edge graphs (query plans), and query outputs are sent once, when a query finishes.
+- **Use cases:**
+  - MongoDB: a live cluster overview (operations per second, connections, cache, queues, replication lag, slowest current operations), for a quick look next to Grafana
+  - Elasticsearch (later plugin): cluster health, indexing and search rates, JVM heap, thread pool rejections
+- **Available today:** `queryEngines.invoke` can fetch a sample from the plugin's backend on demand, and `layout.registerEditor` can open a custom tab. So polling is possible without core changes. What is missing is the chart, the rate maths for cumulative counters, and the dashboard tab with its polling lifecycle. Each plugin building those would bring its own chart library and its own look.
+- **Suggestion:** a `core.timeseries` module:
+  - `timeseries.openDashboard({ id, title, intervalMs, metrics, panels, sample })`
+  - metrics of kind gauge, counter (core computes per-second rates and handles resets) or ratio (e.g. average latency)
+  - panels: line charts, stat tiles and a table refreshed on each poll
+  - plus `components.TimeSeriesChart` for embedding a chart in a plugin's own UI
+
+  Full proposal, including the lifecycle, rendering and the MongoDB overview as first user: [`specs/core-timeseries.md`](specs/core-timeseries.md).
+- **Plugin side meanwhile:** nothing. MongoDB waits for core rather than drawing its own charts.
 
 ## Backend (`backend-api` / protocol)
 

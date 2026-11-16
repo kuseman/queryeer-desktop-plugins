@@ -145,6 +145,14 @@ Core's two-step pattern (`create-release.yml` + `release.yml`), per plugin and w
   - Merge `feature/mongodb` to the default branch
 - [ ] Later: update `catalog/index.json` from the release workflow, once Queryeer reads a catalog (see the root README's Repository and Releases)
 
+## 9. Live cluster overview (blocked on core)
+
+A dashboard tab opened from a connection in the explorer: operations per second, latencies, connections, network, WiredTiger cache, queues, replication lag and the slowest current operations, polled every few seconds. Panels and metrics are in [`specs/core-timeseries.md`](../../specs/core-timeseries.md) §8.
+
+- [ ] Blocked on core: API-GAPS.md F25 (charts and live dashboards). No plugin-drawn charts meanwhile.
+- [ ] Once core has it: a backend `serverStatusSample` invoke action (`serverStatus`, `replSetGetStatus` on a replica set, `currentOp` for the table), and an explorer "Overview" action that opens the dashboard
+- [ ] Maybe before then: a one-off "Server status" in the explorer that runs `serverStatus` into the grid
+
 ## Out of scope for now
 
 - Write support (insert, update, delete, edit in grid). The plugin is read-only by design.
