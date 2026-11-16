@@ -52,6 +52,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
 
+      # plugin.json, the backend pom.xml and the frontend package.json must name the same version
+      - name: Check version
+        run: node shared/scripts/plugin-version.mjs plugins/mongodb
+
       # Frontend typecheck and unit tests, then backend unit and Testcontainers tests (Docker is available on the Ubuntu runner)
       - name: Test
         run: npm run mongodb:test

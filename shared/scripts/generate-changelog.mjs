@@ -1,6 +1,8 @@
 // Generates a plugin's CHANGELOG.md from git history, like Queryeer Desktop's own generate-changelog.mjs.
 //
-//   node shared/scripts/generate-changelog.mjs plugins/<name> <output file>
+//   node shared/scripts/generate-changelog.mjs plugins/<name> <output file> [--version <version>]
+//
+// With --version it writes only that version's section, without the title: the release notes for a GitHub Release.
 //
 // Only commits that touch plugins/<name> count, so other plugins' changes never show up. Each release tag
 // <name>/v<semver> becomes a section, newest first; commits after the latest tag become a section for plugin.json's
@@ -12,9 +14,9 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, dirname, relative, resolve } from "node:path";
 
-const [pluginArg, outputArg] = process.argv.slice(2);
-if (!pluginArg || !outputArg) {
-  console.error("Usage: node shared/scripts/generate-changelog.mjs plugins/<name> <output file>");
+const [pluginArg, outputArg, option, onlyVersion] = process.argv.slice(2);
+if (!pluginArg || !outputArg || (option !== undefined && (option !== "--version" || !onlyVersion))) {
+  console.error("Usage: node shared/scripts/generate-changelog.mjs plugins/<name> <output file> [--version <version>]");
   process.exit(2);
 }
 
@@ -89,6 +91,7 @@ function writeSection(lines, title, groups) {
   if (lines.at(-1) !== "") {
     lines.push("");
   }
+  sections.push({ title, start: lines.length });
   lines.push(`## ${title}`, "");
   if (isEmpty(groups)) {
     lines.push("- Release build", "");
@@ -104,6 +107,7 @@ function writeSection(lines, title, groups) {
 }
 
 const lines = [`# ${manifest.name} Changelog`];
+const sections = [];
 const head = git(["rev-parse", "HEAD"]);
 if (!head) {
   writeSection(lines, `v${manifest.version}`, new Map());
@@ -121,6 +125,16 @@ if (!head) {
   });
 }
 
+let output = lines;
+if (onlyVersion) {
+  const index = sections.findIndex((section) => section.title === `v${onlyVersion}`);
+  if (index < 0) {
+    console.error(`generate-changelog: no section for v${onlyVersion}. Sections: ${sections.map((section) => section.title).join(", ") || "none"}`);
+    process.exit(1);
+  }
+  output = lines.slice(sections[index].start, sections[index + 1]?.start);
+}
+
 mkdirSync(dirname(outputPath), { recursive: true });
-writeFileSync(outputPath, lines.join("\n").trim() + "\n", "utf8");
+writeFileSync(outputPath, output.join("\n").trim() + "\n", "utf8");
 console.log(`Generated ${relative(process.cwd(), outputPath)}`);

@@ -128,21 +128,24 @@ Through the public `tableOutputContextMenu`.
 
 Core's two-step pattern (`create-release.yml` + `release.yml`), per plugin and without snapshots. Shared by every plugin in the repository.
 
-- [ ] **`create-plugin-release.yml`** (`workflow_dispatch`)
+- [x] **`create-plugin-release.yml`** (`workflow_dispatch`), 2026-11-16
   - Inputs: `plugin` (choice, `mongodb` for now) and `increment` (patch / minor / major)
   - Version: latest `<plugin>/v*` tag plus the increment. With no tag yet, `plugin.json`'s version as is, so the first release is 0.1.0.
-  - Sets the version in the three places that must agree: `plugins/<plugin>/plugin.json`, the backend `pom.xml` (the packager refuses a JAR whose version differs from `plugin.json`) and the frontend `package.json`
+  - Sets the version in the three places that must agree: `plugins/<plugin>/plugin.json`, the backend `pom.xml` (the packager refuses a JAR whose version differs from `plugin.json`) and the frontend `package.json`. Done by `shared/scripts/plugin-version.mjs`, which CI also runs to check they agree.
   - Commits `release(<plugin>): v<version>`, tags `<plugin>/v<version>` and pushes; needs `RELEASE_TOKEN` to push to the protected branch, as in core. The changelog already skips `release:` commits.
   - No `-SNAPSHOT` / "prepare for next development iteration" commit: only the ZIP is published, not Maven artifacts, so the version stays at the last release in between, and the changelog lists newer commits under "Unreleased"
   - Only from the default branch
-- [ ] **`release-plugin.yml`** (on push of a `*/v*` tag)
+- [x] **`release-plugin.yml`** (on push of a `*/v*` tag), 2026-11-16
   - Reads the plugin from the tag; builds and tests only that plugin (same steps as `mongodb.yml`)
-  - Fails when the tag's version differs from `plugin.json`, and refuses to publish a tag twice (like core)
+  - Fails when the tag's version differs from `plugin.json`, and refuses to publish a tag twice (an existing GitHub Release for the tag)
   - GitHub Release for the tag with `<id>-<version>.zip` and `.zip.sha256`, release notes from that version's changelog section (the generator needs an option to print one section), `make_latest: false` (GitHub keeps one "latest" per repository; clients read the catalog)
   - `workflow_dispatch` with `dry_run` that builds and checks without publishing, like core
 - [ ] Before the first release
-  - `mongodb:verify` in the root `package.json` hard-codes `0.1.0` in the ZIP name: let `verify-package.mjs` read the version from `plugin.json`, ideally with generic `test` / `package` / `verify <plugin>` scripts instead of per-plugin ones
-  - Merge `feature/mongodb` to the default branch
+  - [x] `mongodb:verify` no longer hard-codes `0.1.0`: `verify-package.mjs` takes the plugin folder and reads the ZIP name from `plugin.json`. Generic `test` / `package` / `verify <plugin>` scripts can wait for a second plugin; the release workflow runs `<plugin>:test` and `<plugin>:package`.
+  - [ ] Repository secret `RELEASE_TOKEN`: a token that may push to the protected `master` and push tags (contents: write). Its tag push is what starts `release-plugin.yml`.
+  - [ ] Merge `feature/mongodb` to `master`
+  - [ ] Dry run: Actions → Release Plugin → Run workflow (`mongodb`, dry run), then check the ZIP and release notes in the run's artifacts
+  - [ ] Actions → Create Plugin Release → `mongodb`. The first release uses `plugin.json`'s 0.1.0.
 - [ ] Later: update `catalog/index.json` from the release workflow, once Queryeer reads a catalog (see the root README's Repository and Releases)
 
 ## 9. Live cluster overview (blocked on core)
