@@ -1,0 +1,155 @@
+name: Release Plugin
+
+# Step 2 of 2: builds, tests and publishes the plugin named by a <plugin>/v<version> tag, which
+# create-plugin-release.yml pushes. Run by hand, it is a dry run: it does everything except publishing.
+
+on:
+  push:
+    tags:
+      - "*/v*"
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: Plugin to check (its folder under plugins/)
+        required: true
+        type: choice
+        options:
+          - mongodb
+      dry_run:
+        description: Build and check without publishing (manual runs must be dry runs; push a tag to publish)
+        required: true
+        default: true
+        type: boolean
+
+concurrency:
+  group: release-plugin-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release ${{ github.event_name == 'push' && github.ref_name || inputs.plugin }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Refuse manual publish
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run != true
+        run: |
+          echo "::error::Manual runs must use dry_run. Run the Create Plugin Release workflow to publish."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Full history and tags: the release notes come from this plugin's commits since its previous tag
+          fetch-depth: 0
+
+      - name: Resolve plugin and version
+        id: release
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_PLUGIN: ${{ inputs.plugin }}
+        run: |
+          if [ "$EVENT" = "push" ]; then
+            TAG="$GITHUB_REF_NAME"
+            PLUGIN="${TAG%%/v*}"
+            VERSION="${TAG#*/v}"
+          else
+            PLUGIN="$INPUT_PLUGIN"
+            VERSION=""
+          fi
+          if ! [[ "$PLUGIN" =~ ^[a-z0-9-]+$ ]] || [ ! -f "plugins/${PLUGIN}/plugin.json" ]; then
+            echo "::error::${PLUGIN} is not a plugin in this repository (no plugins/${PLUGIN}/plugin.json)."
+            exit 1
+          fi
+          if [ -z "$VERSION" ]; then
+            VERSION=$(node shared/scripts/plugin-version.mjs "plugins/${PLUGIN}")
+            TAG="${PLUGIN}/v${VERSION}"
+          fi
+          ID=$(node -p "require('./plugins/${PLUGIN}/plugin.json').id")
+          NAME=$(node -p "require('./plugins/${PLUGIN}/plugin.json').name")
+          {
+            echo "plugin=${PLUGIN}"
+            echo "version=${VERSION}"
+            echo "tag=${TAG}"
+            echo "id=${ID}"
+            echo "name=${NAME}"
+            # A version such as 1.2.0-beta.1 is a GitHub prerelease
+            echo "prerelease=$([[ "$VERSION" == *-* ]] && echo true || echo false)"
+          } >> "$GITHUB_OUTPUT"
+          echo "${NAME} ${VERSION} (${TAG})"
+
+      # The tag's version must be the one committed in plugin.json, pom.xml and package.json
+      - name: Check version
+        run: node shared/scripts/plugin-version.mjs "plugins/${{ steps.release.outputs.plugin }}" --expect "${{ steps.release.outputs.version }}"
+
+      - name: Refuse publishing a tag twice
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "::error::A GitHub Release for ${TAG} already exists. Release a new version instead of publishing this tag again."
+            exit 1
+          fi
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: zulu
+          cache: maven
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Test
+        run: npm run "${{ steps.release.outputs.plugin }}:test"
+
+      - name: Package and verify
+        run: npm run "${{ steps.release.outputs.plugin }}:package"
+
+      - name: Release notes
+        run: node shared/scripts/generate-changelog.mjs "plugins/${{ steps.release.outputs.plugin }}" dist/release-notes.md --version "${{ steps.release.outputs.version }}"
+
+      - name: Upload plugin package
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.release.outputs.id }}-${{ steps.release.outputs.version }}
+          path: |
+            dist/${{ steps.release.outputs.id }}-${{ steps.release.outputs.version }}.zip
+            dist/${{ steps.release.outputs.id }}-${{ steps.release.outputs.version }}.zip.sha256
+            dist/release-notes.md
+          if-no-files-found: error
+
+      # make_latest false: GitHub keeps one "latest" release per repository, not per plugin, so clients read the catalog instead
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: ${{ steps.release.outputs.name }} ${{ steps.release.outputs.version }}
+          body_path: dist/release-notes.md
+          prerelease: ${{ steps.release.outputs.prerelease }}
+          make_latest: "false"
+          draft: false
+          files: |
+            dist/${{ steps.release.outputs.id }}-${{ steps.release.outputs.version }}.zip
+            dist/${{ steps.release.outputs.id }}-${{ steps.release.outputs.version }}.zip.sha256
+
+      - name: Dry-run summary
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          {
+            echo "### Dry run: ${{ steps.release.outputs.name }} ${{ steps.release.outputs.version }}"
+            echo "Built, tested and verified. No release was created. The ZIP and release notes are in this run's artifacts."
+            echo
+            cat dist/release-notes.md
+          } >> "$GITHUB_STEP_SUMMARY"

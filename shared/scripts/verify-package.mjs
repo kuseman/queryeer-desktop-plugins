@@ -1,6 +1,9 @@
 // Verifies an installable plugin ZIP without Docker or Queryeer.
 //
 //   node shared/scripts/verify-package.mjs dist/com.queryeer.mongodb-0.1.0.zip [--expect-jar <prefix> ...]
+//   node shared/scripts/verify-package.mjs plugins/mongodb [--expect-jar <prefix> ...]
+//
+// Given a plugin folder, it verifies that plugin's ZIP in dist/, named after its plugin.json id and version.
 //
 // Checks: plugin.json at the archive root and valid against the vendored v1 schema, file name matches
 // <id>-<version>.zip, safe entry names, no backend.classpath, backend jars under lib/ (including the
@@ -14,7 +17,7 @@ import { readZip } from "./zip.mjs";
 
 const repoRoot = resolve(fileURLToPath(import.meta.url), "..", "..", "..");
 const args = process.argv.slice(2);
-const zipPath = resolve(args[0] ?? fail("Usage: verify-package.mjs <zip> [--expect-jar <prefix> ...]"));
+const zipPath = packagePath(resolve(args[0] ?? fail("Usage: verify-package.mjs <zip | plugin folder> [--expect-jar <prefix> ...]")));
 const expectedJars = [];
 for (let i = 1; i < args.length; i++) {
   if (args[i] === "--expect-jar") {
@@ -102,6 +105,16 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(`verify-package: ${basename(zipPath)} OK (${names.length} entries)`);
+
+/** The ZIP itself, or for a plugin folder the ZIP the packager writes for it: dist/<id>-<version>.zip. */
+function packagePath(path) {
+  const manifestPath = join(path, "plugin.json");
+  if (!existsSync(manifestPath)) {
+    return path;
+  }
+  const { id, version } = JSON.parse(readFileSync(manifestPath, "utf8"));
+  return join(repoRoot, "dist", `${id}-${version}.zip`);
+}
 
 function fail(message) {
   console.error(`verify-package: ${message}`);

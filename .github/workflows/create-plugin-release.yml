@@ -1,0 +1,121 @@
+name: Create Plugin Release
+
+# Step 1 of 2: sets a plugin's version, commits it and pushes the tag <plugin>/v<version>.
+# The tag push starts release-plugin.yml, which builds, tests and publishes that plugin.
+#
+# The version stays at the last release between releases (no -SNAPSHOT): only the ZIP is published, not Maven
+# artifacts, and the changelog lists newer commits as the next version.
+
+on:
+  workflow_dispatch:
+    inputs:
+      plugin:
+        description: Plugin to release (its folder under plugins/)
+        required: true
+        type: choice
+        options:
+          - mongodb
+      increment:
+        description: Version component to increment (ignored for a plugin's first release, which uses plugin.json's version)
+        required: true
+        default: minor
+        type: choice
+        options:
+          - minor
+          - patch
+          - major
+
+concurrency:
+  group: create-plugin-release
+  cancel-in-progress: false
+
+jobs:
+  create-release:
+    name: Create ${{ inputs.plugin }} release tag
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Refuse other branches
+        if: github.ref_name != github.event.repository.default_branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          echo "::error::Releases are created from ${DEFAULT_BRANCH} only, not ${GITHUB_REF_NAME}."
+          exit 1
+
+      # RELEASE_TOKEN: pushes to the protected default branch, and its tag push starts release-plugin.yml
+      # (a push made with the default GITHUB_TOKEN starts no workflows)
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+
+      - name: Configure git
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+
+      - name: Compute version
+        id: version
+        env:
+          PLUGIN: ${{ inputs.plugin }}
+          INCREMENT: ${{ inputs.increment }}
+        run: |
+          CURRENT=$(node shared/scripts/plugin-version.mjs "plugins/${PLUGIN}")
+          # Plain x.y.z release tags only: a prerelease tag is not a base to increment from
+          LATEST_TAG=$(git tag -l "${PLUGIN}/v*" --sort=-version:refname | grep -E "^${PLUGIN}/v[0-9]+\.[0-9]+\.[0-9]+$" | head -1 || true)
+
+          if [ -z "$LATEST_TAG" ]; then
+            VERSION="$CURRENT"
+            echo "::notice::First ${PLUGIN} release: using plugin.json's version ${VERSION} (increment ignored)."
+          else
+            IFS=. read -r MAJOR MINOR PATCH <<< "${LATEST_TAG#"${PLUGIN}"/v}"
+            case "$INCREMENT" in
+              major) VERSION="$((MAJOR + 1)).0.0" ;;
+              patch) VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))" ;;
+              *)     VERSION="${MAJOR}.$((MINOR + 1)).0" ;;
+            esac
+          fi
+
+          TAG="${PLUGIN}/v${VERSION}"
+          if git rev-parse -q --verify "refs/tags/${TAG}" > /dev/null; then
+            echo "::error::Tag ${TAG} already exists."
+            exit 1
+          fi
+          echo "Releasing ${PLUGIN} ${VERSION} (latest tag: ${LATEST_TAG:-none}, current version: ${CURRENT})"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Set version
+        run: node shared/scripts/plugin-version.mjs "plugins/${{ inputs.plugin }}" --set "${{ steps.version.outputs.version }}"
+
+      # The first release usually has nothing to commit: plugin.json already holds its version.
+      # The changelog skips release commits.
+      - name: Commit and tag
+        env:
+          PLUGIN: ${{ inputs.plugin }}
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git add "plugins/${PLUGIN}" package-lock.json
+          if git diff --cached --quiet; then
+            echo "Version is already ${VERSION}; tagging the current commit."
+          else
+            git commit -m "release(${PLUGIN}): v${VERSION}"
+          fi
+          git tag "${TAG}"
+
+      - name: Push
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "${TAG}"
+          echo "Pushed ${TAG}. release-plugin.yml builds and publishes it." >> "$GITHUB_STEP_SUMMARY"

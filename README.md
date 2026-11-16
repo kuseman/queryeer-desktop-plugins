@@ -38,9 +38,25 @@ The vendored schema in `shared/schema/` must be refreshed whenever Queryeer chan
 - **Versions:** each plugin is versioned independently, in its own `plugin.json` (SemVer).
 - **Tags:** `<short-name>/v<semver>`, e.g. `mongodb/v0.1.0`.
 - **Release assets:** `<plugin-id>-<version>.zip` plus `<plugin-id>-<version>.zip.sha256`, e.g. `com.queryeer.mongodb-0.1.0.zip`. Each tag gets its own GitHub Release; prereleases use GitHub's prerelease flag.
-- **CI:** one workflow per plugin, filtered by path, so a change under `plugins/mongodb/**` builds and tests only MongoDB ([mongodb.yml](.github/workflows/mongodb.yml): typecheck, unit tests, Testcontainers tests, package and verify; the ZIP is uploaded as a build artifact). A tag push will build only the tagged plugin.
+- **CI:** one workflow per plugin, filtered by path, so a change under `plugins/mongodb/**` builds and tests only MongoDB ([mongodb.yml](.github/workflows/mongodb.yml): typecheck, unit tests, Testcontainers tests, package and verify; the ZIP is uploaded as a build artifact). A tag push builds only the tagged plugin (see Releasing below).
   - The plugin API comes from npm (`@queryeer/api`) and Maven Central (`backend-api`, `backend-contract`), so CI needs no Queryeer Desktop checkout.
-- **Catalog:** the release workflow publishes the assets and then updates `catalog/index.json`. The catalog is served from a stable URL (GitHub Pages or a raw URL on `master`).
+- **Releasing** works like Queryeer Desktop's, in two steps:
+  1. **Create Plugin Release** ([create-plugin-release.yml](.github/workflows/create-plugin-release.yml), run by hand on `master`):
+     - you pick the plugin and the version increment (minor, patch or major)
+     - it sets the version in `plugin.json`, the backend `pom.xml` and the frontend `package.json` ([plugin-version.mjs](shared/scripts/plugin-version.mjs))
+     - it commits `release(<plugin>): v<version>` and pushes the tag `<plugin>/v<version>`
+     - A plugin's first release uses the version already in its `plugin.json`.
+     - There is no `-SNAPSHOT` in between releases: the version stays at the last release, and the changelog lists newer commits as the next one.
+  2. **Release Plugin** ([release-plugin.yml](.github/workflows/release-plugin.yml), started by the tag):
+     - checks that the tag matches the committed version
+     - tests, packages and verifies that plugin only
+     - publishes a GitHub Release with the ZIP, its `.sha256` file, and that version's changelog section as the release notes
+     - It refuses a tag that already has a release.
+     - A version like `1.2.0-beta.1` becomes a prerelease.
+     - Run by hand, it is a dry run that keeps the ZIP and the notes as run artifacts.
+
+  The first workflow needs a `RELEASE_TOKEN` secret: pushes made with the default `GITHUB_TOKEN` start no other workflows, and `master` is protected.
+- **Catalog** (planned): after publishing, the release workflow will update `catalog/index.json`. The catalog is served from a stable URL (GitHub Pages or a raw URL on `master`).
 - **No "latest release" lookups:** GitHub tracks one latest release per repository, not per plugin, so clients never call `/releases/latest`. They read the catalog.
 
 Catalog format:
