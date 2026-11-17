@@ -1,0 +1,15 @@
+{
+  "$schema": "../../shared/schema/plugin.json.schema.v1.json",
+  "schemaVersion": 1,
+  "id": "com.queryeer.jdbc.mysql",
+  "name": "MySQL and MariaDB",
+  "version": "0.1.0",
+  "description": "MySQL and MariaDB dialect for Queryeer Desktop's JDBC query engine",
+  "dependencies": ["queryengine.jdbc"],
+  "providesCapabilities": ["queryengine.jdbc.dialect.mysql"],
+  "requiredCapabilities": ["queryengine.jdbc.connection"],
+  "backend": {
+    "entrypointClass": "com.queryeer.plugin.jdbc.mysql.MySqlBackendPlugin",
+    "minJavaVersion": "25"
+  }
+}
