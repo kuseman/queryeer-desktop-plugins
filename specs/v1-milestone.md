@@ -141,7 +141,7 @@ Work in Queryeer Desktop. Nothing moves yet.
   - Not yet: the plugin list in the frontend showing those reasons, and the frontend's own dependency checks (external frontend plugins declare dependencies in their TypeScript manifest).
 
 **0.3 Managed drivers for external plugins.** Decided: drivers are never bundled. Plugins compile against them (`provided`) and register them with `context.jdbcDrivers.registerDriver(...)`, which already exists; core downloads them into `libShared`, which is the shared class loader. The download, verification and management infrastructure exists (§2 item 2). What is left:
-- **Replace the `TRUSTED_CONTRIBUTIONS` allowlist** with a rule for external contributions (decision #7). The rule only decides which plugins may make core fetch an artifact into the shared layer; how it is fetched and verified stays as it is.
+- **Replace the `TRUSTED_CONTRIBUTIONS` allowlist** with the rule decided on 2026-11-17 (§8): any registered driver, after the user confirms its first install. The rule only decides which plugins may make core fetch an artifact into the shared layer; how it is fetched and verified stays as it is.
 - **Several drivers per dialect.** The registry (`JdbcDriverRegistryHost`) keeps one driver per `dialectId`: a second registration by the same plugin replaces the first, and one by another plugin is refused. Not needed for the pilot: its one `mysql` dialect uses one driver, MariaDB Connector/J, for both servers. A dialect that wants a choice of drivers would need a registry change.
 - **Runner:** `SharedLibraryLoader` takes the driver classes from the registered drivers instead of `KNOWN_JDBC_DRIVERS`, so it can pick the newest of several versions of any driver. That needs the main process to pass the registered drivers to the backend, e.g. in its start configuration.
 - **Native companions:** recognise native files from the companion declaration (`expectedFileExtension`, the archive entry) instead of the SQL Server DLL names.
@@ -293,15 +293,16 @@ Taken:
 | 2026-11-16 | Plugins share APIs by exporting packages to plugins that declare a dependency; the shared layer is only for drivers and native libraries | §5 |
 | 2026-11-17 | JDBC drivers are never bundled: plugins compile against them, register them through the existing `jdbcDrivers` API, and core downloads them into the shared class loader | 0.3 |
 | 2026-11-17 | Phase 0 starts with a MariaDB/MySQL dialect in this repository, built against core's working tree; the gaps it finds are fixed in core | Phase 0 |
+| 2026-11-17 | Core manages any plugin's registered JDBC driver, replacing `TRUSTED_CONTRIBUTIONS`. Before a driver's first install, a dialog shows its Maven coordinates, its licence or download page and the owning plugin, and the user confirms. Downloads stay Central-only with the checksum and driver-class checks (was open decision #7) | 0.3, `API-GAPS.md` F27 |
+| 2026-11-17 | 0.20.0 takes the gaps that are breaking or block an external engine plugin: the JDBC dialect frontend API (F26), managed external drivers (F27), and the API shape fixes F6, F10, F11. D1 and D2 are decided after those work | `API-GAPS.md` |
 
 Open:
 
 | # | Decision | Suggested |
 |---|---|---|
 | 1 | Which features besides engines leave core (§3) | Only engines, catalogs and foundations for 1.0.0; revisit the rest after |
-| 2 | How native libraries that are not a driver's companion reach the shared layer from external plugins (0.1); drivers and their companions are #7 | Through the driver service, which already installs companion native libraries (`companionArtifacts`, `libNative`), so no plugin ships into the shared layer; otherwise catalog-verified plugins only |
+| 2 | How native libraries that are not a driver's companion reach the shared layer from external plugins (0.1); drivers and their companions are decided (0.3) | Through the driver service, which already installs companion native libraries (`companionArtifacts`, `libNative`), so no plugin ships into the shared layer; otherwise catalog-verified plugins only |
 | 3 | Whether the JDBC API is exported by `queryengine.jdbc` itself or by a separate foundation plugin | By `queryengine.jdbc` itself: fewer plugins to install and version, unless several engines need the foundation without JDBC |
 | 4 | Root POM version once something is published (§6) | Flatten published POMs; keep the `0-SNAPSHOT` aggregator |
 | 5 | Bundled plugin set in the installer (Phase 2) | JDBC family, then payloadbuilder once moved; MongoDB optional |
 | 6 | Plugin ids after the move | Keep today's ids (`queryengine.jdbc`, …) so settings and saved connections carry over; plugins from this repository are `com.queryeer.*` today, so decide whether moved ones are renamed with a migration or keep their ids |
-| 7 | Which external driver registrations core manages, replacing `TRUSTED_CONTRIBUTIONS` (0.3) | Any registered driver, after the user confirms its first install in a dialog that shows the coordinates and the owning plugin. Central only, the checksum and the driver-class check already guard the download. Alternatives: catalog-verified plugins only (third-party dialects without a catalog entry fall back to a manual `libShared` jar), or the allowlist as data from the catalog |

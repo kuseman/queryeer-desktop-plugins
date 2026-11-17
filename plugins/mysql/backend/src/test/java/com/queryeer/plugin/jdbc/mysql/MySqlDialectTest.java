@@ -50,6 +50,26 @@ class MySqlDialectTest
     }
 
     @Test
+    void definesTheConnectionFormFieldsBuildUrlReads()
+    {
+        var fields = dialect.connectionSetup()
+                .orElseThrow()
+                .fields();
+
+        assertEquals(java.util.List.of("host", "port", "database", "username", "password", "sslMode"), fields.stream()
+                .map(field -> field.id())
+                .toList());
+        assertEquals(3306, fields.get(1)
+                .defaultValue());
+        // Every select option is a value buildUrl accepts
+        assertEquals(MySqlDialect.SSL_MODES, fields.get(5)
+                .options()
+                .stream()
+                .map(option -> option.value())
+                .toList());
+    }
+
+    @Test
     void describesItself()
     {
         assertEquals("mysql", dialect.metadata()
