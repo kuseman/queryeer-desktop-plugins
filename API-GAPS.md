@@ -2,7 +2,19 @@
 
 Things found while building plugins in this repository that a third-party plugin cannot do, or can only do by copying host internals. Each entry says what is missing, where the host has it internally, what this repo does instead, and a suggested fix.
 
-Found while building: MongoDB (`plugins/mongodb`). Last updated: 2026-11-16. References are to the Queryeer Desktop repository at commit `52bc815`.
+Found while building: MongoDB (`plugins/mongodb`), and the MySQL and MariaDB dialect (`plugins/mysql`, from F26). Last updated: 2026-11-17. References are to the Queryeer Desktop repository at commit `52bc815`, or at the commit named.
+
+## Scope of 0.20.0
+
+0.20.0 changes the plugin contract anyway (backend exports and versioned dependencies, the SQL parser's API), so it also takes the gaps that are **breaking** or that **block an external engine plugin**, and plugin authors adapt once. Additive gaps can ship in any later 0.20.x or 0.21. Decided 2026-11-17:
+
+1. **A public API for a JDBC dialect's frontend** (F26) and **managed drivers for external dialects** (F27). The MySQL and MariaDB dialect is the test: it has to work in Queryeer with no import from core internals and no bundled driver. Its frontend is built against core's working tree, and each gap it hits is added here.
+2. **API shape fixes, while 0.20.0 breaks things anyway:** F6 (`Disposable` returns), F10 (`invoke` return shape, documentation), F11 (plugin identity declared twice).
+3. **Decided after 1 and 2 work:** D1 (developer plugin folders) and D2 (public backend restart).
+
+Already in 0.20.0 on core's `feat/plugin-exports`: backend `exports` and versioned `dependencies` (see [`specs/v1-milestone.md`](specs/v1-milestone.md) 0.1 and 0.2).
+
+Later: F4, F5, F8, F21–F25, B2, D3, D4.
 
 Priority:
 - **P1**: a real plugin needs it or has to duplicate meaningful code.
@@ -20,12 +32,12 @@ Priority:
 | F3 Open Settings at a setting | P2 | ✅ Fixed in core: `settings.open(settingId?)`. MongoDB's ⚙ action and empty state use it. |
 | F4 One call to register a file type | P2 | Open |
 | F5 Monaco language features | P2 | Partly fixed in core (`0b1819f`): `editorLanguages.registerLanguage({ id, aliases, monarch, configuration })`, a plugin-defined language without validation. Completion, hover and diagnostics are still open (needs design). |
-| F6 Inconsistent `Disposable` returns | P2 | Open |
+| F6 Inconsistent `Disposable` returns | P2 | Open, 0.20.0 |
 | F7 Late settings registration | P2 | ✅ Fixed in core: `registerSettings` refreshes by itself. |
 | F8 ID helpers | P3 | Open |
 | F9 `@queryeer/api` version | P3 | ✅ Handled by the release workflow: `create-release.yml` sets `@queryeer/api` to the release version, and since `e0eb735` also the examples' and `DEVELOPMENT-PLUGIN.md`'s ranges. The next release must be a **minor** one (0.19.0). |
-| F10 `invoke` return shape | P3 | Open |
-| F11 Plugin identity declared twice | P3 | Open |
+| F10 `invoke` return shape | P3 | Open, 0.20.0 |
+| F11 Plugin identity declared twice | P3 | Open, 0.20.0 |
 | F13 Persistence hook drops a pending save | P2 | ✅ Fixed in core: the hook flushes pending items on unmount and always calls the latest `persist`. MongoDB's workaround removed. |
 | F14 New-file list ignores plugin file types | P1 | ✅ Fixed in core: types the setting doesn't mention are appended as enabled, and per-type New commands are registered lazily when the File menu is built. Cause 3 (menu rebuild) was already handled: bootstrap rebuilds the menu after `host.start`. |
 | F15 `settings.open(id)` ignored after a search | P2 | ✅ Fixed in core: a pending request first clears the search and resolves only against the unfiltered tree. |
@@ -39,6 +51,8 @@ Priority:
 | F23 Plugins cannot store a secret | P3 | Open |
 | F24 `@outline-pattern` only works for core's own text types | P2 | Open |
 | F25 No charts or live dashboards | P2 | Open (needs design): proposal in [`specs/core-timeseries.md`](specs/core-timeseries.md) |
+| F26 No public API for a JDBC dialect's frontend | P1 | Items 1–3 fixed in core (`feat/plugin-api-0.20`): forms from the backend dialect's fields, `context.jdbcDialects`. Open: 4 (editor templates), 5 (plan toggle), 6. 0.20.0 |
+| F27 External JDBC drivers cannot be managed | P1 | Open, 0.20.0. Decided: any registered driver, after the user confirms its first install |
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
@@ -274,6 +288,34 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 
   Full proposal, including the lifecycle, rendering and the MongoDB overview as first user: [`specs/core-timeseries.md`](specs/core-timeseries.md).
 - **Plugin side meanwhile:** nothing. MongoDB waits for core rather than drawing its own charts.
+
+### F26 (P1): No public API for a JDBC dialect's frontend
+- **Need:** an external JDBC dialect (MySQL and MariaDB here) needs a connection form, its connections in the JDBC sidebar, and its files bound to the JDBC engine, like the built-in dialects.
+- **What is public already** (`api/src/contracts/queryengine/`): the types `JdbcDialectContribution` and `JdbcDialectConnectionFormProps` (`{ connectionId, properties, password?: SecretRefValue, readonly, onChange(patch) }`), `context.jdbcDrivers`, `context.jdbcTreeContextMenu`, `context.components.PasswordFieldInput`, `JdbcNavigationTypes`. The dialect dropdown in JDBC settings is filled by the **backend** (`jdbc.connection.dialects`), so a dialect registered in the backend registry is listed without frontend work.
+- **What is missing** (from the three built-in dialect frontends, `packages/app/src/plugins/core.queryengine.jdbc.{sqlite,postgres,sqlserver}`, mapped on 2026-11-17). In order of need for a Postgres-like dialect such as MySQL:
+  1. **Registering a dialect.** `registerJdbcDialect(contribution)` (`core.queryengine.jdbc/jdbc-dialect-registry.ts`) is a module-level map with no `PluginContext` field; the public `JdbcDialectContribution` type is read only by it. It also turns on query-plan support (`supportsQueryPlan`). Without it an external dialect gets the generic URL/username/password form. Suggested: `context.jdbcDialects.registerDialect(contribution): Disposable`.
+  2. **Field rules are hard-coded.** `JdbcConnectionsSettingsEditor.tsx` builds a connection's subtitle (`buildSubtitle`) and its validation (`buildRowErrors`) from the property names `filePath`, `host`, `port`, `database`. A dialect with other fields gets no subtitle or validation. Suggested: optional `subtitle(properties)` and `validate(properties)` on the contribution, with today's logic as the default; also optional `defaults` (the Postgres form only displays 5432 and never stores it).
+  3. **Form styles.** The built-in forms use the `jdbc-settings-*` classes from `core.queryengine.jdbc/jdbc-settings.css`. A plugin has to copy them. Suggested: form-row components on `context.components` (label, text, number, select, password row), or the stylesheet documented as public classes like the theme variables (F2).
+  4. **Editor templates.** Postgres and SQL Server register a "Select Top 100" tree action (`registerTreeActionTemplate`), a Describe symbol action (`registerSymbolActionTemplate`) and a "PostgreSQL Database" when-expression template (`registerWhenExpressionTemplates`). Only their contribution types are public. Suggested: these three on `PluginContext`, returning `Disposable`.
+  5. **Query plan toggle.** The Postgres and SQL Server execution-context providers read "Actual plan" from the internal `getQueryViewStateStore`. Needed only for plan support (MySQL's `EXPLAIN ANALYZE`). Suggested: the value passed to the provider, or a read-only accessor.
+  6. **Less urgent:** `registerJdbcTreeNodeContributor` (tree icons; internal, not on the context, no callers); a settings `setValue` plus `initJdbcFileBinding` for welcome flows that create a connection (SQLite's .db welcome editor); SQL Server's `getExpressionRuntime` and `getCoreSettingsService` uses.
+- **Plan:** build the MySQL frontend against core's working tree; items 1–3 are needed for its connection form, 4 and 5 for the editor features. Each becomes public API in `@queryeer/api`, and the built-in dialects move to it, which proves it.
+- **Items 1–3 fixed in core** (branch `feat/plugin-api-0.20`, 2026-11-17), with the design decided that day: **the form comes from the backend dialect's fields.**
+  - `JdbcDialect.connectionSetup()` returns the fields (`JdbcConnectionSetupDefinition`, which the built-in dialects already defined but nothing read). `jdbc.connection.dialects` includes them, and the JDBC settings editor renders the form, stores defaults, and derives validation (required, visible fields) and the subtitle from them. This replaces the hard-coded `host`/`port`/`database`/`filePath` rules (item 2) and the copied CSS (item 3).
+  - `context.jdbcDialects.registerDialect({ dialectId, ConnectionForm?, subtitle?, validate?, supportsQueryPlan? })` returns a `Disposable` (item 1), for what the fields cannot describe.
+  - Built-in dialects moved: PostgreSQL's hand-written form is deleted (rendered from its fields); SQLite and SQL Server register through `context.jdbcDialects` and keep their forms.
+  - The MySQL dialect here has no frontend code: its backend defines the fields (host, port 3306, database, username, password, SSL mode), and `npm run mysql:smoke` checks they reach the frontend.
+  - Docs: core's `DEVELOPMENT-PLUGIN.md` §7.12.1.
+  - **Follow-up:** SQL Server keeps its form because `visibleWhen` takes one value per field (username and password show for two authentication types) and some options are Windows-only. A list of values per `visibleWhen` entry and per-platform options would let it move too.
+- **Backend side:** works today. The dialect registers with `JdbcRuntimeService` through the JDBC engine's exports, with a version range on `queryengine.jdbc` (`npm run mysql:smoke`).
+- **Also:** the SQL parser has no MySQL grammar (`sqlGrammarId` falls back to `postgres`). Not blocking; completion and highlighting are approximate.
+
+### F27 (P1): External JDBC drivers cannot be managed
+- **Need:** a dialect never bundles its driver. It registers it with `context.jdbcDrivers.registerDriver(...)` (public since 0.19), and core downloads it into `libShared`.
+- **Host internally:** the main process (`main/jdbc-drivers/jdbc-driver-artifact-service.ts`) manages only the contributions in its hardcoded `TRUSTED_CONTRIBUTIONS` (PostgreSQL, SQL Server, SQLite). Another plugin's driver is listed, but check, install, update, remove and restore are refused ("Automatic management is not available for this contribution").
+- **Also hardcoded:** the runner's `SharedLibraryLoader.KNOWN_JDBC_DRIVERS` (used to pick the newest of several versions of a driver in `libShared`), and the SQL Server DLL names for native companions.
+- **Decided (2026-11-17):** core manages any registered driver. Before its first install, a dialog shows the Maven coordinates, the licence or download page and the owning plugin, and the user confirms.
+- **Details:** [`specs/v1-milestone.md`](specs/v1-milestone.md) 0.3.
 
 ## Backend (`backend-api` / protocol)
 

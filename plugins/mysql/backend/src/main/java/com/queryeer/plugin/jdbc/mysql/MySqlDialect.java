@@ -6,10 +6,16 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
+import com.queryeer.backend.queryengine.jdbc.JdbcConnection;
 import com.queryeer.backend.queryengine.jdbc.JdbcDialect;
 import com.queryeer.backend.queryengine.jdbc.JdbcDialectMetadata;
 import com.queryeer.backend.queryengine.jdbc.execute.JdbcQueryExecutor;
+import com.queryeer.backend.queryengine.jdbc.setup.JdbcConnectionFieldDefinition;
+import com.queryeer.backend.queryengine.jdbc.setup.JdbcConnectionFieldOption;
+import com.queryeer.backend.queryengine.jdbc.setup.JdbcConnectionFieldType;
+import com.queryeer.backend.queryengine.jdbc.setup.JdbcConnectionSetupDefinition;
 
 /**
  * One dialect for MySQL and MariaDB servers. It uses MariaDB Connector/J (LGPL), which supports both; MySQL Connector/J does not support MariaDB. The driver is never bundled: core's driver service
@@ -51,6 +57,23 @@ final class MySqlDialect implements JdbcDialect
     public JdbcQueryExecutor queryExecutor()
     {
         return queryExecutor;
+    }
+
+    /** Queryeer renders the connection form from these fields; their ids are the properties {@link #buildUrl(Map)} reads. */
+    @Override
+    public Optional<JdbcConnectionSetupDefinition> connectionSetup()
+    {
+        List<JdbcConnectionFieldOption> sslModes = List.of(new JdbcConnectionFieldOption("disable", "Disable"),
+                new JdbcConnectionFieldOption("trust", "Trust (encrypt, accept any certificate)"), new JdbcConnectionFieldOption("verify-ca", "Verify CA (check the certificate)"),
+                new JdbcConnectionFieldOption("verify-full", "Verify Full (check the certificate and host name)"));
+        return Optional.of(new JdbcConnectionSetupDefinition(List.of(
+                new JdbcConnectionFieldDefinition(KEY_HOST, "Host", JdbcConnectionFieldType.TEXT, true, "Host name or IP address of the MySQL or MariaDB server", List.of(), null, null),
+                new JdbcConnectionFieldDefinition(KEY_PORT, "Port", JdbcConnectionFieldType.NUMBER, false, null, List.of(), DEFAULT_PORT, null),
+                new JdbcConnectionFieldDefinition(KEY_DATABASE, "Database", JdbcConnectionFieldType.TEXT, false, "Initial database (optional)", List.of(), null, null),
+                new JdbcConnectionFieldDefinition(JdbcConnection.KEY_USERNAME, "Username", JdbcConnectionFieldType.TEXT, true, null, List.of(), null, null),
+                new JdbcConnectionFieldDefinition(JdbcConnection.KEY_PASSWORD, "Password", JdbcConnectionFieldType.SECRET, false, "Stored in the security vault", List.of(), null, null),
+                new JdbcConnectionFieldDefinition(KEY_SSL_MODE, "SSL Mode", JdbcConnectionFieldType.SELECT, false,
+                        "Empty: the driver's default, which verifies the server certificate. A server with a self-signed certificate needs Trust.", sslModes, null, null))));
     }
 
     @Override

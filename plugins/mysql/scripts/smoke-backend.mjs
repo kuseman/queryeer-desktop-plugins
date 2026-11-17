@@ -127,6 +127,12 @@ try {
     check(notActivated.length === 0, `built-in JDBC plugins activated ${notActivated.length ? `(not: ${notActivated.join(", ")})` : ""}`);
     if (!activated.includes(manifest.id) || notActivated.length > 0) console.log(`runtime status: ${JSON.stringify(runtimeStatus)}`);
 
+    // The settings editor renders the connection form from these fields; no frontend code needed
+    const dialects = await client.request("queryengine.invoke", { engineId: "jdbc", fileId: "smoke-file", action: "jdbc.connection.dialects", payload: {} });
+    const mysqlEntry = (dialects.result?.result ?? []).find((entry) => entry.id === "mysql");
+    const fieldIds = mysqlEntry?.connectionSetup?.fields?.map((field) => field.id) ?? [];
+    check(JSON.stringify(fieldIds) === JSON.stringify(["host", "port", "database", "username", "password", "sslMode"]), `connection form fields ${JSON.stringify(fieldIds)}`);
+
     const select = await client.execute("smoke-select", "SELECT id, status, total FROM orders WHERE status = 'open' ORDER BY id");
     check(select.terminal.method === "queryengine.completed", `query completes: ${select.terminal.method} ${JSON.stringify(select.terminal.params?.error ?? "")}`);
     check(JSON.stringify(select.columns[0]) === JSON.stringify(["id", "status", "total"]), `columns ${JSON.stringify(select.columns[0])}`);
