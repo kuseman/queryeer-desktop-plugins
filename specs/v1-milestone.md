@@ -61,8 +61,8 @@ These are the hard blockers. Everything else is API surface.
    - Built-in dialects see `JdbcRuntimeService` only because the `jdbc-foundation` runtime plugin puts its jar in the shared loader and marks `com.queryeer.backend.queryengine.jdbc.` parent-first.
    - The runner collects those contributions from built-in manifests only (`loadBuiltinManifests` → `PluginRuntimeContributionCollector`).
    - This repository's package check rejects `runtime`, and the packager rejects `backend.classpath`.
-   - **Unverified, and probably wrong as first written:** `BackendRunnerModule` builds one `PluginClassLoaderFactory` for every plugin, external ones included, with the built-ins' shared classpath and parent-first prefixes. So an external dialect compiled against the published `jdbc-foundation` with `provided` scope probably does see `JdbcRuntimeService` today. The MariaDB/MySQL pilot (Phase 0) settles this first.
-   - Even if it loads, it does so by accident: nothing declares the dependency, nothing checks its version, and it works only because the JDBC classes sit in the shared layer, which §5 limits to drivers and native libraries.
+   - **But an external dialect does see them today (verified 2026-11-17).** `BackendRunnerModule` builds one `PluginClassLoaderFactory` for every plugin, external ones included, with the built-ins' shared classpath and parent-first prefixes. The MySQL dialect's smoke test (`npm run mysql:smoke`) runs the packaged plugin in core's real runner: compiled against `jdbc-foundation` with `provided` scope, it activates, gets `JdbcRuntimeService` from `services()`, registers its dialect, and runs a query through the JDBC engine against MySQL 8.4, with the driver only in `<appDir>/libShared`.
+   - It works by accident: nothing declares the dependency, nothing checks its version, and it works only because the built-in JDBC classes sit in the shared layer, which §5 limits to drivers and native libraries. So this is not a blocker for the pilot, but it still is one for 1.0.0 (0.1, 0.2).
    - With its own copy of `jdbc-foundation` bundled, `services().get(JdbcRuntimeService.class)` finds nothing, because the registry looks up by class, and two copies are different classes.
 2. **Have its JDBC drivers managed.** Most of the driver infrastructure exists and is public; one allowlist keeps external plugins out of it.
    - **What already works:**
@@ -95,9 +95,10 @@ Each phase ends with exit criteria, not a date.
 Work in Queryeer Desktop. Nothing moves yet.
 
 **Start: a MariaDB/MySQL dialect in this repository.** A new dialect, built here against core's working tree, finds the gaps one at a time instead of designing every Phase 0 item up front. Each gap goes into `API-GAPS.md` and is fixed in core, the way the MongoDB plugin drove 0.19.0.
-- One `mysql` dialect for MySQL and MariaDB, with both drivers registered through `context.jdbcDrivers` and managed by core (0.3), and none bundled. The user downloads them, so their licences (MySQL Connector/J GPL with the FOSS exception, MariaDB Connector/J LGPL) don't matter to the plugin.
+- One `mysql` dialect for MySQL and MariaDB, with its driver registered through `context.jdbcDrivers` and managed by core (0.3), never bundled. The user downloads it, so its licence (LGPL) doesn't matter to the plugin.
 - Order:
-  1. Backend only: a minimal dialect that registers with `JdbcRuntimeService` and runs `SELECT 1` against `mariadb` and `mysql` Testcontainers. This settles §2 item 1: whether an external dialect sees the JDBC classes today.
+  1. ✅ Backend only: a minimal dialect that registers with `JdbcRuntimeService`, tested against `mysql` and `mariadb` Testcontainers, and a smoke test in core's real runner. It settled §2 item 1: an external dialect sees the JDBC classes today, by accident of the shared layer.
+     - One `mysql` dialect serves both servers, with MariaDB Connector/J, which supports both (MySQL Connector/J does not support MariaDB). One dialect means one driver, which is what core's driver registry allows.
   2. The dialect itself (schema browsing, the executor), modelled on `SqliteDialect`.
   3. The frontend. The SQLite dialect's frontend imports `registerJdbcDialect`, `jdbc-settings`, `initJdbcFileBinding`, `PasswordFieldInput` and the JDBC CSS from core internals; each becomes an API gap.
   4. Release through this repository's release workflows, after the core release it needs.
@@ -130,7 +131,7 @@ Work in Queryeer Desktop. Nothing moves yet.
 
 **0.3 Managed drivers for external plugins.** Decided: drivers are never bundled. Plugins compile against them (`provided`) and register them with `context.jdbcDrivers.registerDriver(...)`, which already exists; core downloads them into `libShared`, which is the shared class loader. The download, verification and management infrastructure exists (§2 item 2). What is left:
 - **Replace the `TRUSTED_CONTRIBUTIONS` allowlist** with a rule for external contributions (decision #7). The rule only decides which plugins may make core fetch an artifact into the shared layer; how it is fetched and verified stays as it is.
-- **Several drivers per dialect.** The registry (`JdbcDriverRegistryHost`) keeps one driver per `dialectId`: a second registration by the same plugin replaces the first, and one by another plugin is refused. So MySQL Connector/J and MariaDB Connector/J for one `mysql` dialect need either two dialect ids or a registry change. The pilot decides which.
+- **Several drivers per dialect.** The registry (`JdbcDriverRegistryHost`) keeps one driver per `dialectId`: a second registration by the same plugin replaces the first, and one by another plugin is refused. Not needed for the pilot: its one `mysql` dialect uses one driver, MariaDB Connector/J, for both servers. A dialect that wants a choice of drivers would need a registry change.
 - **Runner:** `SharedLibraryLoader` takes the driver classes from the registered drivers instead of `KNOWN_JDBC_DRIVERS`, so it can pick the newest of several versions of any driver. That needs the main process to pass the registered drivers to the backend, e.g. in its start configuration.
 - **Native companions:** recognise native files from the companion declaration (`expectedFileExtension`, the archive entry) instead of the SQL Server DLL names.
 - Exit: the MariaDB/MySQL dialect's drivers can be checked, installed, updated and removed from the driver settings, and load in the backend, with no change to core's lists.
