@@ -121,7 +121,11 @@ try {
     const runtimeStatus = status.result?.runtimeStatus ?? status.result;
     const activated = runtimeStatus?.activatedPluginIds ?? [];
     check(activated.includes(manifest.id), `plugin ${manifest.id} activated`);
-    if (!activated.includes(manifest.id)) console.log(`runtime status: ${JSON.stringify(runtimeStatus)}`);
+    // The JDBC family shares classes through the JDBC plugin's exports: every member must still activate
+    const jdbcFamily = ["queryengine.jdbc", "queryengine.jdbc.dialect.postgres", "queryengine.jdbc.dialect.sqlite", "queryengine.jdbc.dialect.sqlserver", "queryengine.payloadbuilder"];
+    const notActivated = jdbcFamily.filter((id) => !activated.includes(id));
+    check(notActivated.length === 0, `built-in JDBC plugins activated ${notActivated.length ? `(not: ${notActivated.join(", ")})` : ""}`);
+    if (!activated.includes(manifest.id) || notActivated.length > 0) console.log(`runtime status: ${JSON.stringify(runtimeStatus)}`);
 
     const select = await client.execute("smoke-select", "SELECT id, status, total FROM orders WHERE status = 'open' ORDER BY id");
     check(select.terminal.method === "queryengine.completed", `query completes: ${select.terminal.method} ${JSON.stringify(select.terminal.params?.error ?? "")}`);

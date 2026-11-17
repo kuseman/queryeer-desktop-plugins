@@ -122,12 +122,23 @@ Work in Queryeer Desktop. Nothing moves yet.
 - Exit:
   - an external test pair: a plugin that exports an API, and one that depends on it and uses a service through `services()`
   - the SQL Server dialect loads as an external ZIP, and integrated authentication still works (the acceptance case in `SHARED_RUNTIME_PLUGINS.md`)
+- **Status (2026-11-17): implemented on core's `feat/plugin-exports` branch, for release in 0.20.0.**
+  - `backend.exports`, and class lookup in this order: parent-first, exports of direct dependencies (from the exporter's own jars, no re-export), own jars, shared parent. A missing class names the dependency to declare. Runner tests compile real plugin pairs (`PluginExportsTest`).
+  - The JDBC family switched: `queryengine.jdbc` bundles the JDBC foundation and the SQL parser and exports them; the `queryengine.runtime.jdbc-foundation` and `queryengine.runtime.sql-parser` shared-layer plugins are gone. The built-in dialects, payloadbuilder and the MySQL dialect from this repository all load through the export (`npm run mysql:smoke` checks that every built-in JDBC plugin activates).
+  - **Rule 2 in §5 held:** the SQL parser's API used to take tree-sitter trees, and payloadbuilder built them itself. It now takes SQL text (`SqlContextDetector.detectContext(text, line, column)`, `SqlCompletionSupport.extractAliases(text, line, column)`), so tree-sitter stays inside `queryengine.jdbc` and is not exported. The parser's POM marks tree-sitter `<optional>true</optional>` (Maven has no "internal" scope), so plugins that compile against the parser, including third parties using the published artifact, cannot use tree-sitter types; `queryengine.jdbc` declares tree-sitter itself to bundle it. This is the pattern for every exported API library (§5).
+  - Native libraries stay bound to the shared loader through a loader class the runner defines in it; `loaderClass` in `runtime.shared.nativeLibraries` is optional.
+  - Not yet: the SQL Server dialect as an external ZIP (it moves in Phase 1), the payloadbuilder foundation (still in the shared layer, Phase 4), and the trust rule for external `runtime.shared` (decision #2).
 
 **0.2 Versioned dependencies and activation order.**
 - `dependencies` takes `{ id, version }` with a SemVer range. A plain id string keeps working.
 - The runner and the frontend refuse a plugin whose dependency is missing or out of range. They say why in the plugin list ("needs JDBC ≥ 0.4, 0.3.2 installed") instead of skipping it silently.
-- **Plugins activate in dependency order,** so a service is registered before a dependent asks for it. Check whether the runner orders by dependency today. Exports (0.1) need this either way.
+- **Plugins activate in dependency order,** so a service is registered before a dependent asks for it. The runner already did this (`PluginValidation.topologicalSort`).
 - Exit: a test plugin pair, where the right version loads and the wrong version shows the reason.
+- **Status (2026-11-17): done in core (`667ad01`, for 0.20.0).**
+  - npm-style SemVer ranges (`SemVer` in `backend-core`); `-SNAPSHOT` counts as its release.
+  - Built-in plugins report the backend's version, so `{ "id": "queryengine.jdbc", "version": "^0.20.0" }` targets a Queryeer release. The MySQL dialect declares exactly that.
+  - Skipped plugins get a reason in the runtime status (missing, out of range, dependency skipped, capability only from skipped plugins); dependents of a skipped plugin are now skipped too.
+  - Not yet: the plugin list in the frontend showing those reasons, and the frontend's own dependency checks (external frontend plugins declare dependencies in their TypeScript manifest).
 
 **0.3 Managed drivers for external plugins.** Decided: drivers are never bundled. Plugins compile against them (`provided`) and register them with `context.jdbcDrivers.registerDriver(...)`, which already exists; core downloads them into `libShared`, which is the shared class loader. The download, verification and management infrastructure exists (§2 item 2). What is left:
 - **Replace the `TRUSTED_CONTRIBUTIONS` allowlist** with a rule for external contributions (decision #7). The rule only decides which plugins may make core fetch an artifact into the shared layer; how it is fetched and verified stays as it is.
