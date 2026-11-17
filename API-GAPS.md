@@ -52,7 +52,7 @@ Priority:
 | F24 `@outline-pattern` only works for core's own text types | P2 | Open |
 | F25 No charts or live dashboards | P2 | Open (needs design): proposal in [`specs/core-timeseries.md`](specs/core-timeseries.md) |
 | F26 No public API for a JDBC dialect's frontend | P1 | Items 1–3 fixed in core (`feat/plugin-api-0.20`): forms from the backend dialect's fields, `context.jdbcDialects`. Open: 4 (editor templates), 5 (plan toggle), 6. 0.20.0 |
-| F27 External JDBC drivers cannot be managed | P1 | Open, 0.20.0. Decided: any registered driver, after the user confirms its first install |
+| F27 External JDBC drivers cannot be managed | P1 | ✅ Fixed in core (working tree, not yet committed): any registered driver, after the user approves its first install. Checked by hand on 2026-11-17 with the MySQL plugin: installed from a zip, driver approved and downloaded from the UI, queries against MariaDB 11.8, no jar copied by hand |
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
@@ -315,6 +315,15 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Host internally:** the main process (`main/jdbc-drivers/jdbc-driver-artifact-service.ts`) manages only the contributions in its hardcoded `TRUSTED_CONTRIBUTIONS` (PostgreSQL, SQL Server, SQLite). Another plugin's driver is listed, but check, install, update, remove and restore are refused ("Automatic management is not available for this contribution").
 - **Also hardcoded:** the runner's `SharedLibraryLoader.KNOWN_JDBC_DRIVERS` (used to pick the newest of several versions of a driver in `libShared`), and the SQL Server DLL names for native companions.
 - **Decided (2026-11-17):** core manages any registered driver. Before its first install, a dialog shows the Maven coordinates, the licence or download page and the owning plugin, and the user confirms.
+- **Fixed in core (working tree on `feat/plugin-api-0.20`, not yet committed):**
+  - `TRUSTED_CONTRIBUTIONS` is now `BUILTIN_CONTRIBUTIONS`: approved without asking, metadata still canonical. Any other contribution has `JdbcDriverStatus.approvalRequired: true` until the user approves it.
+  - The approval dialog uses `core.dialog` (`plugins/core.queryengine.jdbc/jdbc-driver-approval.ts`). On confirm the renderer calls the new `appShell.approveJdbcDriver`, and the main process records the approval; install and update refuse an unapproved driver. A native main-process dialog was tried first and dropped: renderer code can already reach main through `window.appShell` (`file:write`, `plugins:install-from-zip`), so it bought no real boundary and looked unlike the rest of the app.
+  - Approvals are stored in `jdbc-drivers.json` with the declaration as approved; changing what is downloaded asks again.
+  - The runner gets the built-in and approved driver classes as `-Dqueryeer.jdbc.driverClasses`; `KNOWN_JDBC_DRIVERS` is gone.
+  - Native companions are named and recognised from the archive entry's file name template; the SQL Server DLL regexes are gone (and with them the pre-2019 `sqljdbc_auth.dll` name).
+  - After review, core also refuses a contribution that would clash with a managed one: a built-in's plugin ID with other coordinates, a driver class another managed driver already uses (decided 2026-11-17: refuse the second rather than share one provider), or overlapping companion file names.
+- **Exit check (2026-11-17, by hand):** with the MySQL plugin installed from its zip, its frontend (`plugins/mysql/frontend`) registered MariaDB Connector/J, the user approved and installed it from JDBC Drivers, the backend loaded it after a restart, and queries ran against MariaDB 11.8. No jar was copied by hand. Update and remove were covered by the unit tests only.
+- **Found on the way:** a dialect's saved schema snapshots aren't re-crawled when the dialect plugin is updated. After the MySQL tree fix, the database selector kept showing the old `def` snapshot until a manual refresh in Schema Cache.
 - **Details:** [`specs/v1-milestone.md`](specs/v1-milestone.md) 0.3.
 
 ## Backend (`backend-api` / protocol)

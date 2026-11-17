@@ -5,6 +5,6 @@ class MariaDb118ContainerTest extends BaseMySqlContainerTest
 {
     MariaDb118ContainerTest()
     {
-        super("mariadb:11.8.9", "MARIADB");
+        super("mariadb:11.8.9", "MARIADB", true);
     }
 }

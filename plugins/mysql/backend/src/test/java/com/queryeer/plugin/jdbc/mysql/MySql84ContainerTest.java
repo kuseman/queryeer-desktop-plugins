@@ -5,6 +5,6 @@ class MySql84ContainerTest extends BaseMySqlContainerTest
 {
     MySql84ContainerTest()
     {
-        super("mysql:8.4.13", "MYSQL");
+        super("mysql:8.4.13", "MYSQL", false);
     }
 }
