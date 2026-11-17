@@ -7,7 +7,8 @@
 //
 // Checks: plugin.json at the archive root and valid against the vendored v1 schema, file name matches
 // <id>-<version>.zip, safe entry names, no backend.classpath, backend jars under lib/ (including the
-// plugin's own jar), the frontend entry module exists when declared, and the .sha256 file matches.
+// plugin's own jar), no bundled copy of what Queryeer provides (its API, built-in engine libraries, JDBC
+// drivers), the frontend entry module exists when declared, and the .sha256 file matches.
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
@@ -76,6 +77,14 @@ if (!manifestData) {
     for (const stray of strays) {
       problems.push(`jar outside lib/: ${stray}`);
     }
+    // A bundled copy of a class the host or another plugin provides is a different class at runtime: services are not
+    // found and casts fail. JDBC drivers come from core's driver service in libShared, never from the plugin.
+    for (const jar of jars) {
+      const reason = providedElsewhere(basename(jar));
+      if (reason) {
+        problems.push(`lib/${basename(jar)} must not be bundled: ${reason}`);
+      }
+    }
   }
 
   if (manifest.frontend) {
@@ -105,6 +114,16 @@ if (problems.length > 0) {
   process.exit(1);
 }
 console.log(`verify-package: ${basename(zipPath)} OK (${names.length} entries)`);
+
+/** Why a jar must not be in a plugin's lib/, or null when it may be. */
+function providedElsewhere(jarName) {
+  const provided = [
+    [/^backend-(api|contract)-/, "Queryeer provides its plugin API (use provided scope)"],
+    [/^backend-lib-queryengine-/, "Queryeer's built-in query engines provide it (use provided scope)"],
+    [/^(mariadb-java-client|mysql-connector-j|postgresql|mssql-jdbc|sqlite-jdbc|ojdbc\d*|h2|duckdb_jdbc)-\d/, "JDBC drivers are installed by Queryeer's driver service into libShared"]
+  ];
+  return provided.find(([pattern]) => pattern.test(jarName))?.[1] ?? null;
+}
 
 /** The ZIP itself, or for a plugin folder the ZIP the packager writes for it: dist/<id>-<version>.zip. */
 function packagePath(path) {

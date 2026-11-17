@@ -5,7 +5,7 @@
   "name": "MySQL and MariaDB",
   "version": "0.1.0",
   "description": "MySQL and MariaDB dialect for Queryeer Desktop's JDBC query engine",
-  "dependencies": ["queryengine.jdbc"],
+  "dependencies": [{ "id": "queryengine.jdbc", "version": "^0.20.0" }],
   "providesCapabilities": ["queryengine.jdbc.dialect.mysql"],
   "requiredCapabilities": ["queryengine.jdbc.connection"],
   "backend": {
