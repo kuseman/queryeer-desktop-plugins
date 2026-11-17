@@ -12,6 +12,7 @@ import com.queryeer.backend.queryengine.jdbc.JdbcConnection;
 import com.queryeer.backend.queryengine.jdbc.JdbcDialect;
 import com.queryeer.backend.queryengine.jdbc.JdbcDialectMetadata;
 import com.queryeer.backend.queryengine.jdbc.execute.JdbcQueryExecutor;
+import com.queryeer.backend.queryengine.jdbc.schema.JdbcSchemaResolver;
 import com.queryeer.backend.queryengine.jdbc.setup.JdbcConnectionFieldDefinition;
 import com.queryeer.backend.queryengine.jdbc.setup.JdbcConnectionFieldOption;
 import com.queryeer.backend.queryengine.jdbc.setup.JdbcConnectionFieldType;
@@ -37,8 +38,9 @@ final class MySqlDialect implements JdbcDialect
     static final String KEY_SSL_MODE = "sslMode";
 
     /**
-     * MariaDB Connector/J's {@code sslMode} values. Without one, the driver's default applies, which verifies the server certificate since version 4: a server with a self-signed certificate then needs
-     * {@code trust}.
+     * MariaDB Connector/J's {@code sslMode} values. Without one, the driver's default applies, which since version 4 encrypts and verifies the server certificate. MariaDB 11.4 and later pass that check
+     * with the certificate they generate themselves ("zero-configuration TLS": the driver checks its fingerprint against the password, so a password is needed). MySQL's self-signed certificate does not
+     * pass, so MySQL without a proper certificate needs {@code trust}.
      */
     static final List<String> SSL_MODES = List.of("disable", "trust", "verify-ca", "verify-full");
 
@@ -46,6 +48,7 @@ final class MySqlDialect implements JdbcDialect
     private static final String URL_PREFIX = "jdbc:mariadb://";
 
     private final MySqlQueryExecutor queryExecutor = new MySqlQueryExecutor();
+    private final Map<String, JdbcSchemaResolver> branchResolvers = new MySqlSchemaResolvers(this).resolvers();
 
     @Override
     public JdbcDialectMetadata metadata()
@@ -57,6 +60,13 @@ final class MySqlDialect implements JdbcDialect
     public JdbcQueryExecutor queryExecutor()
     {
         return queryExecutor;
+    }
+
+    /** The default tree would list one database, {@code def}: see {@link MySqlSchemaResolvers}. */
+    @Override
+    public Map<String, JdbcSchemaResolver> branchResolvers()
+    {
+        return branchResolvers;
     }
 
     /** Queryeer renders the connection form from these fields; their ids are the properties {@link #buildUrl(Map)} reads. */
@@ -73,7 +83,8 @@ final class MySqlDialect implements JdbcDialect
                 new JdbcConnectionFieldDefinition(JdbcConnection.KEY_USERNAME, "Username", JdbcConnectionFieldType.TEXT, true, null, List.of(), null, null),
                 new JdbcConnectionFieldDefinition(JdbcConnection.KEY_PASSWORD, "Password", JdbcConnectionFieldType.SECRET, false, "Stored in the security vault", List.of(), null, null),
                 new JdbcConnectionFieldDefinition(KEY_SSL_MODE, "SSL Mode", JdbcConnectionFieldType.SELECT, false,
-                        "Empty: the driver's default, which verifies the server certificate. A server with a self-signed certificate needs Trust.", sslModes, null, null))));
+                        "Empty: the driver's default, which encrypts and verifies the server certificate. MariaDB 11.4 and later pass with their own generated certificate; MySQL's self-signed certificate needs Trust.",
+                        sslModes, null, null))));
     }
 
     @Override
