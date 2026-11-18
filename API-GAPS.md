@@ -14,7 +14,7 @@ Found while building: MongoDB (`plugins/mongodb`), and the MySQL and MariaDB dia
 
 Already in 0.20.0 on core's `feat/plugin-exports`: backend `exports` and versioned `dependencies` (see [`specs/v1-milestone.md`](specs/v1-milestone.md) 0.1 and 0.2).
 
-Later: F4, F5, F8, F21–F25, B2, D3, D4.
+Later: F4, F5, F8, F21–F25, F28 (with the JDBC move, Phase 0.4), B2, D3, D4.
 
 Priority:
 - **P1**: a real plugin needs it or has to duplicate meaningful code.
@@ -51,8 +51,9 @@ Priority:
 | F23 Plugins cannot store a secret | P3 | Open |
 | F24 `@outline-pattern` only works for core's own text types | P2 | Open |
 | F25 No charts or live dashboards | P2 | Open (needs design): proposal in [`specs/core-timeseries.md`](specs/core-timeseries.md) |
-| F26 No public API for a JDBC dialect's frontend | P1 | Items 1–3 fixed in core (`feat/plugin-api-0.20`): forms from the backend dialect's fields, `context.jdbcDialects`. Open: 4 (editor templates), 5 (plan toggle), 6. 0.20.0 |
+| F26 No public API for a JDBC dialect's frontend | P1 | Items 1–4 fixed in core (`feat/plugin-api-0.20`): forms from the backend dialect's fields, `context.jdbcDialects`, and the template registries `context.jdbcTreeActions`, `context.symbolActions`, `context.whenExpressions` (4 not yet committed). Open: 5 (plan toggle), 6. 0.20.0 |
 | F27 External JDBC drivers cannot be managed | P1 | ✅ Fixed in core (working tree, not yet committed): any registered driver, after the user approves its first install. Checked by hand on 2026-11-17 with the MySQL plugin: installed from a zip, driver approved and downloaded from the UI, queries against MariaDB 11.8, no jar copied by hand |
+| F28 Engine-specific API lives in `@queryeer/api` | P1 | Open, with the JDBC move (Phase 0.4). Until then, no new engine-specific members on `PluginContext` |
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
@@ -297,6 +298,8 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
   2. **Field rules are hard-coded.** `JdbcConnectionsSettingsEditor.tsx` builds a connection's subtitle (`buildSubtitle`) and its validation (`buildRowErrors`) from the property names `filePath`, `host`, `port`, `database`. A dialect with other fields gets no subtitle or validation. Suggested: optional `subtitle(properties)` and `validate(properties)` on the contribution, with today's logic as the default; also optional `defaults` (the Postgres form only displays 5432 and never stores it).
   3. **Form styles.** The built-in forms use the `jdbc-settings-*` classes from `core.queryengine.jdbc/jdbc-settings.css`. A plugin has to copy them. Suggested: form-row components on `context.components` (label, text, number, select, password row), or the stylesheet documented as public classes like the theme variables (F2).
   4. **Editor templates.** Postgres and SQL Server register a "Select Top 100" tree action (`registerTreeActionTemplate`), a Describe symbol action (`registerSymbolActionTemplate`) and a "PostgreSQL Database" when-expression template (`registerWhenExpressionTemplates`). Only their contribution types are public. Suggested: these three on `PluginContext`, returning `Disposable`.
+     - ✅ **Fixed in core (working tree, 2026-11-17):** one registry per feature, decided with the user: `context.jdbcTreeActions.registerTemplate`, `context.symbolActions.registerTemplate`, `context.whenExpressions.registerTemplates` and `.registerVariables`. Variables were added because a plugin's `activeFile.metadata.<plugin id>.*` keys need them for autocompletion. All return a `Disposable`, and every built-in caller uses `context` (PostgreSQL, SQL Server, Payloadbuilder, and the variables of `core.queryengine`, `core.queryengine.jdbc` and the table output). Documented in `DEVELOPMENT-PLUGIN.md` §7.4 and §7.12.2.
+     - The MySQL plugin uses them: Select Top 100 Rows and Show Create Statement tree actions, a Describe symbol action, and a "MySQL / MariaDB Database" when-expression template, all removed on `deactivate`. Until core 0.20.0 is published, its `tsconfig.json` maps `@queryeer/api/*` to core's built working tree (`paths`). It is not a `file:` dependency, because npm hoisted that to the repo root and rewrote the lockfile for MongoDB too.
   5. **Query plan toggle.** The Postgres and SQL Server execution-context providers read "Actual plan" from the internal `getQueryViewStateStore`. Needed only for plan support (MySQL's `EXPLAIN ANALYZE`). Suggested: the value passed to the provider, or a read-only accessor.
   6. **Less urgent:** `registerJdbcTreeNodeContributor` (tree icons; internal, not on the context, no callers); a settings `setValue` plus `initJdbcFileBinding` for welcome flows that create a connection (SQLite's .db welcome editor); SQL Server's `getExpressionRuntime` and `getCoreSettingsService` uses.
 - **Plan:** build the MySQL frontend against core's working tree; items 1–3 are needed for its connection form, 4 and 5 for the editor features. Each becomes public API in `@queryeer/api`, and the built-in dialects move to it, which proves it.
@@ -325,6 +328,20 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Exit check (2026-11-17, by hand):** with the MySQL plugin installed from its zip, its frontend (`plugins/mysql/frontend`) registered MariaDB Connector/J, the user approved and installed it from JDBC Drivers, the backend loaded it after a restart, and queries ran against MariaDB 11.8. No jar was copied by hand. Update and remove were covered by the unit tests only.
 - **Found on the way:** a dialect's saved schema snapshots aren't re-crawled when the dialect plugin is updated. After the MySQL tree fix, the database selector kept showing the old `def` snapshot until a manual refresh in Schema Cache.
 - **Details:** [`specs/v1-milestone.md`](specs/v1-milestone.md) 0.3.
+
+### F28 (P1): Engine-specific API lives in `@queryeer/api`
+- **Need:** a JDBC dialect or payloadbuilder catalog compiles against its engine's API and finds the engine through a declared dependency, as on the backend (`backend.exports`). Then the JDBC and payloadbuilder plugins can leave core and release their API on their own schedule.
+- **Today:** core's `PluginContext` and `@queryeer/api` carry them:
+  - `PluginContext.jdbcDialects`, `jdbcDrivers`, `jdbcTreeContextMenu`, `jdbcTreeActions` (added in 0.20.0 by F26 item 4), `payloadbuilderCatalog`
+  - `queryengine/Jdbc*.ts`, `queryengine/PayloadbuilderCatalogExtension.ts`, `settings/TreeAction*.ts`
+  - `JdbcEngineState`, `PayloadbuilderEngineState` and the `JdbcSchema*` / `JdbcConnectionSession*` types in `backend/Types.ts`
+- **Stays in core:** `context.symbolActions` and `context.whenExpressions` (every engine uses them), and the driver methods on `appShell` (the main process owns `libShared`, and drivers are process-wide; [`specs/v1-milestone.md`](specs/v1-milestone.md) §5).
+- **Blocked by:** a public plugin-to-plugin service API in the frontend plugin context. Without it, split packages would only move type files: the objects would still come from core's `PluginContext`.
+- **Suggested fix (Phase 0.4):**
+  - the plugin-to-plugin service API in `@queryeer/api`
+  - types-only `@queryeer/jdbc-api` and `@queryeer/payloadbuilder-api`, released with their plugins (npm scope decided 2026-11-18, [`specs/v1-milestone.md`](specs/v1-milestone.md) §5 rule 6)
+  - the `PluginContext` members above deprecated, then removed per the deprecation policy
+- **Until then:** no new engine-specific members on `PluginContext`; each one is another change plugin authors make twice.
 
 ## Backend (`backend-api` / protocol)
 

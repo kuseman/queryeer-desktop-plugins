@@ -8,7 +8,14 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "noEmit": true,
-    "types": ["node"]
+    "types": ["node"],
+    // Until core 0.20.0 is published, type-check against core's working tree (build it with `npm run typecheck` in
+    // queryeer-desktop first). The plugin imports only types from @queryeer/api, which esbuild erases, so the bundle
+    // does not depend on this. Not a package.json `file:` link: npm would hoist it and MongoDB's CI would resolve it.
+    // When 0.20.0 is out, remove `paths` and set the devDependency to ^0.20.0, like the backend's queryeer.backend.version.
+    "paths": {
+      "@queryeer/api/*": ["../../../../queryeer-desktop/development/queryeer-desktop/packages/api/dist/contracts/*.d.ts"]
+    }
   },
   "include": ["src/**/*.ts"]
 }
