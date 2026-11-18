@@ -255,11 +255,13 @@ If the ecosystem were to stay first-party, the shared layer would be enough. Thi
 3. **One version number for the API artifact and the plugin.** Release `jdbc-api` 1.2.0 with the JDBC plugin 1.2.0. Then the Maven version a dependent compiles against and the range it declares in `plugin.json` are the same number.
 4. **SemVer for the API.** Within a major version, an exported API only grows. Removals follow the deprecation policy (Phase 3).
 5. **Guard against bundling.** This repository's package check refuses a ZIP whose `lib/` contains a jar it should only reference through a dependency, e.g. `jdbc-api-*.jar` inside a dialect. That turns a confusing runtime failure into a build error.
-6. **The frontend follows the same pattern.** A dialect's frontend registers with the JDBC frontend, today through the internal `ExtensionRegistry`. The equivalent is:
-   - a types-only npm package (`@queryeer-plugins/jdbc-api`) to compile against
+6. **The frontend follows the same pattern.** A dialect's frontend registers with the JDBC frontend. Since 0.20.0 it does that through members of core's `PluginContext` (`context.jdbcDialects`, `jdbcDrivers`, `jdbcTreeActions`, `jdbcTreeContextMenu`), with their types in `@queryeer/api` (`API-GAPS.md` F28). The equivalent is:
+   - a types-only npm package to compile against: `@queryeer/jdbc-api`, and `@queryeer/payloadbuilder-api` for catalogs
    - an object the JDBC plugin offers through the frontend plugin context, found by the dependent through its declared dependency
 
    This needs a public plugin-to-plugin service API in `@queryeer/api` (part of Phase 0.4).
+
+   **npm scope (decided 2026-11-18):** API packages use the existing `@queryeer` scope rather than a new `@queryeer-plugins` npm organization, which would be one more account to run. The plugin still owns its API package: it is released from this repository with the plugin's version (rule 3), and each package is linked to this repository's release workflow through npm trusted publishing, so no long-lived token is needed. Each package's README says which plugin it belongs to.
 
 ## 6. Publishing from this repository
 
