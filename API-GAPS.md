@@ -337,6 +337,7 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
   - `JdbcEngineState`, `PayloadbuilderEngineState` and the `JdbcSchema*` / `JdbcConnectionSession*` types in `backend/Types.ts`
 - **Stays in core:** `context.symbolActions` and `context.whenExpressions` (every engine uses them), and the driver methods on `appShell` (the main process owns `libShared`, and drivers are process-wide; [`specs/v1-milestone.md`](specs/v1-milestone.md) §5).
 - **Blocked by:** a public plugin-to-plugin service API in the frontend plugin context. Without it, split packages would only move type files: the objects would still come from core's `PluginContext`.
+- **How it is found (decided 2026-11-18):** the JDBC and payloadbuilder frontends first become their own workspace packages in core, compiled against `@queryeer/api` and their engine's API package alone. Every import that no longer compiles is recorded here. See [`specs/v1-milestone.md`](specs/v1-milestone.md) Phase 0.4.
 - **Suggested fix (Phase 0.4):**
   - the plugin-to-plugin service API in `@queryeer/api`
   - types-only `@queryeer/jdbc-api` and `@queryeer/payloadbuilder-api`, released with their plugins (npm scope decided 2026-11-18, [`specs/v1-milestone.md`](specs/v1-milestone.md) §5 rule 6)

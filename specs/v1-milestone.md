@@ -149,10 +149,35 @@ Work in Queryeer Desktop. Nothing moves yet.
 - ✅ Exit checked by hand on 2026-11-17: plugin installed from its zip, driver approved and installed from JDBC Drivers, loaded after a backend restart, queries ran against MariaDB 11.8; no jar copied by hand. Update and remove: unit tests only.
 - Exit: the MariaDB/MySQL dialect's drivers can be checked, installed, updated and removed from the driver settings, and load in the backend, with no change to core's lists.
 
-**0.4 Close the API gaps the move needs.**
-- Every internal listed in §2 is either public in `@queryeer/api` or no longer needed.
-- `API-GAPS.md` has no open P1.
-- Exit: the moving plugins compile against `@queryeer/api` alone. A lint rule in core forbids imports from `core/` and `renderer/` in plugin folders, which also keeps future core plugins honest.
+**0.4 Close the API gaps the move needs.** Decided 2026-11-18: each family that moves becomes its own package in core first, so the compiler finds every internal it uses, before anything leaves the repository.
+- **Why:** the backend is already split this way. `backend-plugin-jdbc`, `backend-plugin-payloadbuilder` and the dialects are their own Maven modules, compiled against `backend-api` (`backend-contract` as `provided`, `backend-core` for tests only). The frontend isn't: `core.queryengine.jdbc*` and `core.queryengine.payloadbuilder*` live in `packages/app/src/plugins` and import the app freely. Counted on 2026-11-18, about 120 relative imports:
+
+  | Imported from | Imports |
+  |---|---|
+  | `core.settings` | 37 |
+  | `core.queryengine` | 24 |
+  | `core.queryengine.payloadbuilder` (catalogs → engine) | 14 |
+  | `core.flow`, `core.commands` | 10 each |
+  | `core.graph` | 7 |
+  | `../../core/`, `../../renderer/` | 11 |
+  | others | about 10 |
+
+  A lint rule can be switched off and misses relative imports between plugin folders. A package of its own does not compile with them.
+- **The packages, as npm workspaces in core's `packages/`:**
+  - `plugin-jdbc`: the JDBC engine frontend and the built-in dialects
+  - `plugin-payloadbuilder`: the payloadbuilder engine frontend and its catalogs
+  - `jdbc-api` and `payloadbuilder-api`: the types-only API packages (§5 rule 6, `API-GAPS.md` F28), published as `@queryeer/jdbc-api` and `@queryeer/payloadbuilder-api`
+- **Dependency rules:**
+  - An engine package depends on `@queryeer/api` and its own API package.
+  - A dialect or catalog depends on `@queryeer/api` and its engine's API package, never on the engine itself. Catalogs reaching the payloadbuilder engine test the plugin-to-plugin service API.
+  - Tests use the public API too; `vi.mock` of app internals goes.
+- **No runtime change:** the app bundles the packages as dependencies, as it does the folders today.
+- **Every import that no longer compiles is a gap:** it is made public in `@queryeer/api` or in the engine's API package, or it becomes unnecessary. Each one is recorded in `API-GAPS.md`.
+- **Order:** after 0.20.0, one family at a time. JDBC first (the MySQL dialect already exercises its API), then payloadbuilder.
+- **Backend side:** split `jdbc-foundation` into an API and its implementation (§5 rule 1). The modules are already isolated.
+- Every internal listed in §2 is either public or no longer needed, and `API-GAPS.md` has no open P1.
+- **Plugins that stay in core:** a lint rule forbids imports from `core/` and `renderer/` in their folders, to keep them honest. The moving families don't need it; their package boundary is stricter.
+- Exit: each moving family is its own workspace package in core that compiles against `@queryeer/api` and its engine's API package alone. Phase 1 then moves the packages (`git mv`) together with their Maven modules.
 
 **0.5 The development loop.** D1 (developer plugin folders) and D2 (public backend restart) are required. D3 (shadow-copied jars) and D4 (watch mode) are strongly suggested.
 - Exit: change a dialect in this repository, rebuild, restart the backend from the command palette, and see the change without quitting the app.
