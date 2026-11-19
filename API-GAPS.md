@@ -61,7 +61,7 @@ Priority:
 | D1 Developer plugin folders | P1 | ✅ Fixed in core (working tree, 2026-11-19): `QUERYEER_DEV_PLUGINS`, `DEVELOPMENT-PLUGIN.md` §8.4 |
 | D2 Public backend restart | P1 | ✅ Fixed in core (working tree, 2026-11-19): command `core.backend.restartAndReload` (Restart Backend and Reload), which reloads the window after the restart |
 | D3 Jar locking on Windows | P2 | Partly fixed in core (working tree, 2026-11-19): the backend loads copies of developer plugin folders. Installed plugins are still loaded in place |
-| D4 Watch mode for external plugins | P2 | Open |
+| D4 Watch mode for external plugins | P2 | Partly covered (2026-11-19): under core's `npm run dev`, Vite reloads the window when a developer folder's frontend changes. No watcher for jars; Restart Backend and Reload is in the status bar instead |
 
 ## Frontend (`@queryeer/api`)
 
@@ -416,3 +416,4 @@ This repo's `npm run mongodb:dev` (`shared/scripts/dev-frontend.mjs`) narrows th
   - offer a backend restart (D2) when `lib/*.jar` changes
 
   Together with `esbuild --watch` on the plugin side, that is hot reload for external plugins in practice.
+- **Partly covered (2026-11-19):** under core's `npm run dev`, Vite serves developer folders' frontends and reloads the window when one changes; the packaged app doesn't. A jar watcher with a restart toast was judged not worth it for 0.20.0. Instead, while developer folders are set, Restart Backend and Reload is also in the status bar. It's a reload of the whole window, not hot module replacement.
