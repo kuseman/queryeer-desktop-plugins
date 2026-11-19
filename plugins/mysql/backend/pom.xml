@@ -17,13 +17,6 @@
     <name>Queryeer MySQL and MariaDB Dialect (backend)</name>
 
     <properties>
-        <!--
-            Built against Queryeer Desktop's working tree until core releases the API this dialect needs:
-            run `mvnw install` in queryeer-backend first. MongoDB keeps the published version from the root POM.
-            When core releases, switch to that version and add this plugin's CI workflow.
-        -->
-        <queryeer.backend.version>0.20.0-SNAPSHOT</queryeer.backend.version>
-
         <!-- The driver is never bundled: core's driver service downloads it into libShared. Tests only. -->
         <mariadb.driver.version>4.0.0</mariadb.driver.version>
     </properties>

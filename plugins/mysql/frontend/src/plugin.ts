@@ -1,5 +1,5 @@
 import type { Disposable } from "@queryeer/api/editor/EditorApi";
-import type { Plugin } from "@queryeer/api/plugin/Plugin";
+import type { ExternalPlugin } from "@queryeer/api/plugin/PluginModule";
 import type { WhenExpressionTemplate } from "@queryeer/api/commands/WhenExpressionTypes";
 import type { JdbcManagedDriverContribution } from "@queryeer/api/queryengine/JdbcDriverExtension";
 import type { SymbolActionTemplateContribution } from "@queryeer/api/queryengine/SymbolActionTemplateContribution";
@@ -93,13 +93,9 @@ let disposables: Disposable[] = [];
  * Registers the driver and the templates users can create actions from. The connection form comes from the
  * backend's `connectionSetup()` fields, and the database tree from its schema resolvers.
  */
-export const mysqlPlugin: Plugin = {
+export const mysqlPlugin: ExternalPlugin = {
   manifest: {
-    id: PLUGIN_ID,
-    name: "MySQL and MariaDB",
-    version: "0.1.0",
     kind: "feature",
-    description: "MySQL and MariaDB dialect for the JDBC query engine",
     dependencies: ["core.queryengine.jdbc"]
   },
 

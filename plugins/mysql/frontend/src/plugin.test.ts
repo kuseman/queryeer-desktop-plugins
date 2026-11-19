@@ -79,9 +79,7 @@ describe("mysqlPlugin", () => {
       "utf8"
     );
 
-    expect(mysqlPlugin.manifest.id).toBe(PLUGIN_ID);
     expect(manifest.id).toBe(PLUGIN_ID);
-    expect(manifest.version).toBe(mysqlPlugin.manifest.version);
     expect(dialect).toContain(`DIALECT_ID = "${DIALECT_ID}"`);
     expect(dialect).toContain(`DRIVER_CLASS_NAME = "${MARIADB_DRIVER.driverClassName}"`);
   });
