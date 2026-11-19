@@ -10,7 +10,7 @@ Found while building: MongoDB (`plugins/mongodb`), and the MySQL and MariaDB dia
 
 1. **A public API for a JDBC dialect's frontend** (F26) and **managed drivers for external dialects** (F27). The MySQL and MariaDB dialect is the test: it has to work in Queryeer with no import from core internals and no bundled driver. Its frontend is built against core's working tree, and each gap it hits is added here.
 2. **API shape fixes, while 0.20.0 breaks things anyway:** F6 (`Disposable` returns), F10 (`invoke` return shape, documentation), F11 (plugin identity declared twice).
-3. **Decided after 1 and 2 work:** D1 (developer plugin folders) and D2 (public backend restart).
+3. **Decided after 1 and 2 work:** D1 (developer plugin folders) and D2 (public backend restart). Decided 2026-11-19: both go into 0.20.0.
 
 Already in 0.20.0 on core's `feat/plugin-exports`: backend `exports` and versioned `dependencies` (see [`specs/v1-milestone.md`](specs/v1-milestone.md) 0.1 and 0.2).
 
@@ -58,9 +58,9 @@ Priority:
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
 | B4 Runner working directory | P3 | ✅ Fixed in core: `queryeer.builtins.dir` / `QUERYEER_BUILTINS_DIR`. MongoDB's smoke test uses it. |
-| D1 Developer plugin folders | P1 | Open |
-| D2 Public backend restart | P1 | Open |
-| D3 Jar locking on Windows | P2 | Open |
+| D1 Developer plugin folders | P1 | ✅ Fixed in core (working tree, 2026-11-19): `QUERYEER_DEV_PLUGINS`, `DEVELOPMENT-PLUGIN.md` §8.4 |
+| D2 Public backend restart | P1 | ✅ Fixed in core (working tree, 2026-11-19): command `core.backend.restartAndReload` (Restart Backend and Reload), which reloads the window after the restart |
+| D3 Jar locking on Windows | P2 | Partly fixed in core (working tree, 2026-11-19): the backend loads copies of developer plugin folders. Installed plugins are still loaded in place |
 | D4 Watch mode for external plugins | P2 | Open |
 
 ## Frontend (`@queryeer/api`)
@@ -394,11 +394,16 @@ This repo's `npm run mongodb:dev` (`shared/scripts/dev-frontend.mjs`) narrows th
 - **Today:** plugins are discovered only in the managed plugins directory (`%APPDATA%\queryeer-desktop\plugins`). A developer copies build output there, or links it.
 - **Links break in dev mode:** in dev mode (`npm run dev`), Vite serves external modules through `/@fs/`. It resolves the real path of a junction or symlink, which falls outside `server.fs.allow` (§8.1.1), so linking a plugin's `dist/` folder into the plugins directory fails there.
 - **Suggestion:** a setting or launch flag (e.g. `QUERYEER_DEV_PLUGIN_DIRS`) listing plugin folders to load in place. Add those folders to Vite's `fs.allow` in dev mode and to the backend's plugin discovery.
+- **Fixed in core (working tree, 2026-11-19):** the environment variable `QUERYEER_DEV_PLUGINS` lists plugin folders, separated like `PATH`. An environment variable, not a setting, because the dev server's `fs.allow` is read when Vite starts.
+  - The frontend is imported from the folder. The backend loads a copy made before each backend start (`-Dqueryeer.plugins.devDirs`), so the build output stays writable on Windows (D3, for these folders only).
+  - A developer folder replaces an installed plugin with the same `plugin.json` id, both halves, and is always enabled. Ids starting with `core.` or `queryengine.` (the built-in plugins) are refused on both sides.
+  - Tools → Plugins lists the folders. Safe mode skips them.
 
 ### D2 (P1): Public "Restart backend" command
 - **Today:** backend plugin jars load once per JVM, and a window reload does not restart the backend, so every backend change needs a full app restart.
 - **Internal today:** core already restarts the backend internally for JDBC driver changes (`appShell.restartBackendForJdbcDrivers`).
 - **Suggestion:** a public command, e.g. `core.backend.restart`, that restarts the JVM and re-runs plugin discovery. For external plugins it should come with a frontend window reload, so both halves of a plugin are always the same version.
+- **Fixed in core (working tree, 2026-11-19):** the command `core.backend.restartAndReload` (Tools → Dev → Restart Backend and Reload, the command palette, and the status bar while developer plugin folders are set; named apart from the JDBC drivers' "Restart backend", which restarts only the backend). It restarts the backend, which also applies pending driver changes and copies the developer folders again, then reloads the window. It is refused while queries run, with a notification.
 
 ### D3 (P2): Jar locking on Windows
 - **Today:** the backend loads plugin jars in place (`URLClassLoader` over `<plugins>/<id>/lib/*.jar`). On Windows those files stay locked while Queryeer runs. Rebuilding or recopying a plugin into its installed folder fails until the app exits. The installer already has to defer upgrades to restart because of this.

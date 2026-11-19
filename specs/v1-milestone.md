@@ -181,6 +181,10 @@ Work in Queryeer Desktop. Nothing moves yet.
 
 **0.5 The development loop.** D1 (developer plugin folders) and D2 (public backend restart) are required. D3 (shadow-copied jars) and D4 (watch mode) are strongly suggested.
 - Exit: change a dialect in this repository, rebuild, restart the backend from the command palette, and see the change without quitting the app.
+- **Status (2026-11-19): D1 and D2 implemented in core's working tree, for 0.20.0** (decided with the user: in 0.20.0, not later).
+  - D1: `QUERYEER_DEV_PLUGINS` lists plugin folders loaded in place. The backend loads copies made on each start, which also covers D3 for these folders.
+  - D2: the command `core.backend.restartAndReload` restarts the backend and reloads the window.
+  - Not yet checked by hand with the MySQL dialect. D4 (watch mode) is still open.
 
 ### Phase 1: move the JDBC family
 
