@@ -16,13 +16,13 @@ The first-milestone design is agreed (see [Design](#design)).
 - a **MongoDB** sidebar view for MongoDB files, with connection and database pickers, plus a read-only "connection | database" label in the query editor status bar
 - the execution-context provider
 
-It builds against `@queryeer/api` 0.19.0 from npm. The explorer, query bar and later work are tracked in [TODO.md](TODO.md); the changelog is generated from commit subjects (see [Building](#building)).
+It builds against `@queryeer/api` 0.20.0 from npm. The explorer, query bar and later work are tracked in [TODO.md](TODO.md); the changelog is generated from commit subjects (see [Building](#building)).
 
 Missing host APIs found along the way are tracked in [API-GAPS.md](../../API-GAPS.md).
 
 GitHub Releases integration in Queryeer Desktop comes after the complete local plugin lifecycle is proven.
 
-The plugin depends on public plugin APIs added to Queryeer Desktop in `@queryeer/api` 0.19.0:
+The plugin depends on public plugin APIs added to Queryeer Desktop in `@queryeer/api` 0.19.0, and needs 0.20.0 for `Disposable` subscriptions and its identity coming from `plugin.json`:
 
 - `context.queryEngines`: engine registration, `invoke`, execution-context providers, query events and editor status items
 - `context.editorLanguages`
@@ -80,7 +80,7 @@ Frontend and backend targets should be versioned and replaced atomically as one 
 
 ## Design
 
-Agreed design for the first milestone. It targets the Queryeer plugin APIs in `@queryeer/api` `^0.19.0` and `backend-api` (Java 25).
+Agreed design for the first milestone. It targets the Queryeer plugin APIs in `@queryeer/api` `^0.20.0` and `backend-api` (Java 25).
 
 ### Identity and Packaging
 
@@ -264,19 +264,19 @@ From the repository root (requires Java 25, Node 20+, and Docker for the Testcon
 | `npm install` | Installs the packaging tooling and the frontend workspace (`plugins/*/frontend`), including `@queryeer/api` from npm |
 | `npm run mongodb:test` | Runs the frontend typecheck and tests, then the backend tests |
 | `npm run mongodb:package` | Builds the backend and the frontend, then assembles and verifies `dist/com.queryeer.mongodb-<version>.zip`, its `.sha256`, and the unpacked folder `dist/com.queryeer.mongodb-<version>/` |
-| `npm run mongodb:dev` | Frontend watch mode. Rebuilds on save, copies the bundle into the installed plugin, and installs `dist/…` first if it isn't installed. Then use **Reload Window** in Queryeer. Set `QUERYEER_PLUGINS_DIR` to use another plugins directory |
+| `npm run mongodb:dev` | Frontend watch mode. Rebuilds on save and copies the bundle into `dist/com.queryeer.mongodb-<version>/`, the folder Queryeer loads as a developer plugin (see the development loop below). Run `mongodb:package` once first |
 | `npm run mongodb:smoke` | Runs the end-to-end check in Queryeer's backend runner. Set `QUERYEER_DESKTOP_DIR` if the core checkout is not at `../queryeer-desktop/development` |
 
 To get a database that exercises the explorer and query bar, run [`scripts/seed-showcase.js`](scripts/seed-showcase.js) with `mongosh` against a local server. It creates `qmongo_showcase` with made-up data; see the script's header for what it covers.
 
-The plugin API comes from public registries: `@queryeer/api` from npm and `backend-api` / `backend-contract` from Maven Central, both 0.19.0. No Queryeer Desktop checkout is needed to build or test; only `mongodb:smoke` uses one.
+The plugin API comes from public registries: `@queryeer/api` from npm and `backend-api` / `backend-contract` from Maven Central, both 0.20.0. No Queryeer Desktop checkout is needed to build or test; only `mongodb:smoke` uses one.
 
-The plugin version lives in three places (API-GAPS.md F11):
+The plugin version lives in three places, which `shared/scripts/plugin-version.mjs` checks against each other (CI runs it):
 - `plugins/mongodb/plugin.json`
 - the `<version>` in `plugins/mongodb/backend/pom.xml`
-- `manifest.version` in `frontend/src/plugin.tsx`
+- the `version` in `plugins/mongodb/frontend/package.json`
 
-The packaging script checks only the first two.
+The frontend doesn't repeat the plugin's id, name or version: since 0.20.0 Queryeer takes them from `plugin.json` and passes them as `context.plugin`.
 
 The changelog is generated from git history by [`shared/scripts/generate-changelog.mjs`](../../shared/scripts/generate-changelog.mjs), the same way Queryeer Desktop generates its own. It takes only commits that touch `plugins/mongodb`, one section per `mongodb/v<semver>` tag plus one for commits since the latest tag, grouped by conventional-commit type (`feat:`, `fix:`, others). The backend build runs it (`generate-resources`) and packages the result into the JAR, and the plugin registers it with `context.changelogs()`, so it covers frontend and backend changes and shows in Queryeer's About dialog. Commit subjects are the changelog, so write them for users.
 
@@ -286,14 +286,23 @@ To try the plugin in Queryeer:
 
 Then restart Queryeer.
 
-**Development loop.** Queryeer has no hot reload for external plugins: it loads them once at startup and doesn't watch files.
+**Development loop.** Queryeer 0.20.0 can load the plugin straight from the build output, so there is no need to install it again after each change:
+
+1. Run `npm run mongodb:package` once.
+2. Start Queryeer with `QUERYEER_DEV_PLUGINS` set to the packaged folder. It replaces an installed MongoDB plugin while it is set, so the released version can stay installed.
+   ```powershell
+   $env:QUERYEER_DEV_PLUGINS = "C:\src\queryeer-desktop-plugins\dist\com.queryeer.mongodb-0.1.0"
+   & "C:\Program Files\Queryeer\Queryeer.exe"
+   ```
+3. Pick up changes:
 
 | Change | How to pick it up |
 |---|---|
-| Frontend | Keep `npm run mongodb:dev` running and use **Reload Window** after saving. No app restart needed. |
-| Backend | Use the Testcontainers tests and `npm run mongodb:smoke`. They need no app. To try a backend change in Queryeer: re-run `npm run mongodb:package`, quit Queryeer (Windows locks the plugin jars), replace the installed folder, and start Queryeer again. |
+| Frontend | Keep `npm run mongodb:dev` running, then **Reload Window** after saving |
+| Backend, or both | `npm run mongodb:package`, then **Restart Backend and Reload** (Tools → Dev, or the status bar item shown while developer folders are set). Queryeer loads copies of the jars, so the build can overwrite them while it runs |
+| `plugin.json` | `npm run mongodb:package`, then **Restart Backend and Reload** |
 
-What core could add to shorten this is listed under "Developer experience" in [API-GAPS.md](../../API-GAPS.md) (D1–D4).
+The Testcontainers tests and `npm run mongodb:smoke` still cover the backend without the app. See section 8.4 in Queryeer Desktop's `DEVELOPMENT-PLUGIN.md` for the details.
 
 If npm blocks esbuild's install script (`npm warn install-scripts`), the build still works because the platform binary comes from esbuild's optional dependency. `npm install-scripts approve esbuild` silences the warning.
 
@@ -308,7 +317,7 @@ If npm blocks esbuild's install script (`npm warn install-scripts`), the build s
 ## Development Order
 
 1. ✅ Inspect the current Queryeer plugin examples and public APIs.
-2. ✅ Backend and frontend builds, against the 0.19.0 plugin API from npm and Maven Central.
+2. ✅ Backend and frontend builds, against the published plugin API from npm and Maven Central (0.20.0 since 2026-11-19).
 3. ✅ Add a valid root `plugin.json`. The plugin loads and activates in the real backend runner.
 4. ✅ Engine registered on both the backend and the frontend.
 5. ✅ Connection settings, vault-resolved passwords, settings editor with Test connection, and the MongoDB sidebar view with connection and database pickers.
