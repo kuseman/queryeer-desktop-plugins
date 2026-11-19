@@ -5,9 +5,18 @@
   "name": "MySQL and MariaDB",
   "version": "0.1.0",
   "description": "MySQL and MariaDB dialect for Queryeer Desktop's JDBC query engine",
-  "dependencies": [{ "id": "queryengine.jdbc", "version": ">=0.20.0 <1.0.0" }],
-  "providesCapabilities": ["queryengine.jdbc.dialect.mysql"],
-  "requiredCapabilities": ["queryengine.jdbc.connection"],
+  "dependencies": [
+    {
+      "id": "queryengine.jdbc",
+      "version": ">=0.20.0 <1.0.0"
+    }
+  ],
+  "providesCapabilities": [
+    "queryengine.jdbc.dialect.mysql"
+  ],
+  "requiredCapabilities": [
+    "queryengine.jdbc.connection"
+  ],
   "backend": {
     "entrypointClass": "com.queryeer.plugin.jdbc.mysql.MySqlBackendPlugin",
     "minJavaVersion": "25"
