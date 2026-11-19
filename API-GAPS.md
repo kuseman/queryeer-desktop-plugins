@@ -23,7 +23,7 @@ Priority:
 
 ## Status
 
-"Fixed in core" means the fix is in the Queryeer Desktop working tree after `52bc815`, reviewed on 2026-11-13 and not yet released. The MongoDB plugin already uses these fixes through its local `file:` link to `@queryeer/api`.
+"Fixed in core (working tree)" below was written before the release. Everything marked fixed for the 0.20.0 scope shipped in Queryeer Desktop 0.20.0 (2026-11-19), and both plugins build against the published 0.20.0 (`@queryeer/api` from npm, `backend-api`, `backend-contract` and `backend-lib-queryengine-jdbc-foundation` from Maven Central).
 
 | Gap | Priority | Status |
 |---|---|---|
@@ -32,7 +32,7 @@ Priority:
 | F3 Open Settings at a setting | P2 | ✅ Fixed in core: `settings.open(settingId?)`. MongoDB's ⚙ action and empty state use it. |
 | F4 One call to register a file type | P2 | Open |
 | F5 Monaco language features | P2 | Partly fixed in core (`0b1819f`): `editorLanguages.registerLanguage({ id, aliases, monarch, configuration })`, a plugin-defined language without validation. Completion, hover and diagnostics are still open (needs design). |
-| F6 Inconsistent `Disposable` returns | P2 | ✅ Fixed in core (working tree, 2026-11-18): every `register*`, `subscribe` and `on*` returns a `Disposable`. Breaking: MongoDB must move when it builds against 0.20.0 |
+| F6 Inconsistent `Disposable` returns | P2 | ✅ Fixed in core (working tree, 2026-11-18): every `register*`, `subscribe` and `on*` returns a `Disposable`. Breaking: MongoDB moved to it with 0.20.0 |
 | F7 Late settings registration | P2 | ✅ Fixed in core: `registerSettings` refreshes by itself. |
 | F8 ID helpers | P3 | Open |
 | F9 `@queryeer/api` version | P3 | ✅ Handled by the release workflow: `create-release.yml` sets `@queryeer/api` to the release version, and since `e0eb735` also the examples' and `DEVELOPMENT-PLUGIN.md`'s ranges. The next release must be a **minor** one (0.19.0). |
