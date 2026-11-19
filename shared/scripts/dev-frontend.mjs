@@ -1,20 +1,17 @@
-// Frontend development loop for a plugin: rebuild on save, copy the bundle into the installed plugin, then Reload Window in Queryeer.
+// Frontend development loop for a plugin: rebuild on save into the packaged folder Queryeer loads as a developer plugin.
 //
 //   node shared/scripts/dev-frontend.mjs plugins/mongodb
 //
 // - Watches <plugin>/frontend/src with esbuild (same options as the workspace's `build` script).
-// - After each successful build, copies frontend/dist/index.js to <plugins dir>/<plugin id>/frontend/index.js.
-// - If the plugin is not installed yet, installs the packaged folder dist/<id>-<version>/ first (run `npm run <plugin>:package` once).
+// - After each successful build, copies frontend/dist/index.js into dist/<id>-<version>/frontend/index.js.
+// - Start Queryeer with QUERYEER_DEV_PLUGINS set to that folder (the script prints it). Queryeer 0.20.0 loads it in
+//   place, instead of an installed copy with the same id.
 //
-// Queryeer loads external plugins once at startup and has no file watching, so:
-// - frontend changes: Reload Window (Tools → Dev → Reload, or the "Reload Window" command); no restart needed
-// - backend changes:  re-run `npm run <plugin>:package`, quit Queryeer, copy the folder again (the JVM locks the jars), start Queryeer
-// See API-GAPS.md "Developer experience" (D1–D4) for what core could add to remove those steps.
-//
-// The plugins directory defaults to Queryeer's per-user directory; override it with QUERYEER_PLUGINS_DIR.
+// - frontend changes: Reload Window
+// - backend changes:  re-run `npm run <plugin>:package`, then Restart Backend and Reload (Queryeer copies the jars, so
+//   the build can overwrite them while it runs)
 import { context as esbuildContext } from "esbuild";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,14 +22,12 @@ if (!manifest.frontend) {
   fail(`${manifest.id} has no frontend`);
 }
 
-const pluginsDir = process.env.QUERYEER_PLUGINS_DIR ?? defaultPluginsDir();
-// Same folder naming as Queryeer's installer (plugin-inventory-service.ts toPluginFolderName)
-const installedDir = join(pluginsDir, manifest.id.replace(/[\\/:*?"<>|]/g, "_"));
-const installedBundle = join(installedDir, "frontend", "index.js");
+const packagedDir = join(repoRoot, "dist", `${manifest.id}-${manifest.version}`);
+const packagedBundle = join(packagedDir, "frontend", "index.js");
 const frontendDir = join(pluginDir, "frontend");
 const outfile = join(frontendDir, "dist", "index.js");
 
-ensureInstalled();
+ensurePackaged();
 
 const ctx = await esbuildContext({
   entryPoints: [join(frontendDir, "src", "index.ts")],
@@ -46,17 +41,17 @@ const ctx = await esbuildContext({
   logLevel: "warning",
   plugins: [
     {
-      name: "copy-to-installed-plugin",
+      name: "copy-to-packaged-plugin",
       setup(build) {
         build.onEnd((result) => {
           const time = new Date().toLocaleTimeString();
           if (result.errors.length > 0) {
-            console.log(`[${time}] build failed (${result.errors.length} error(s)); installed bundle unchanged`);
+            console.log(`[${time}] build failed (${result.errors.length} error(s)); packaged bundle unchanged`);
             return;
           }
-          mkdirSync(join(installedDir, "frontend"), { recursive: true });
-          copyFileSync(outfile, installedBundle);
-          console.log(`[${time}] updated ${installedBundle}. Reload Window in Queryeer to pick it up.`);
+          mkdirSync(join(packagedDir, "frontend"), { recursive: true });
+          copyFileSync(outfile, packagedBundle);
+          console.log(`[${time}] updated ${relative(repoRoot, packagedBundle)}. Reload Window in Queryeer to pick it up.`);
         });
       }
     }
@@ -65,6 +60,7 @@ const ctx = await esbuildContext({
 
 await ctx.watch();
 console.log(`Watching ${relative(repoRoot, join(frontendDir, "src"))} for ${manifest.id}. Press Ctrl+C to stop.`);
+console.log(`Start Queryeer with QUERYEER_DEV_PLUGINS=${packagedDir}`);
 
 const stop = async () => {
   await ctx.dispose();
@@ -73,34 +69,15 @@ const stop = async () => {
 process.on("SIGINT", stop);
 process.on("SIGTERM", stop);
 
-function ensureInstalled() {
-  if (existsSync(join(installedDir, "plugin.json"))) {
-    const installed = JSON.parse(readFileSync(join(installedDir, "plugin.json"), "utf8"));
-    if (installed.frontend?.entryModule !== "./frontend/index.js") {
-      fail(`${installedDir} has frontend.entryModule "${installed.frontend?.entryModule}"; expected "./frontend/index.js". Reinstall from dist/.`);
-    }
-    if (installed.version !== manifest.version) {
-      console.warn(`Installed ${manifest.id} is ${installed.version}, source is ${manifest.version}. Reinstall to update the backend and manifest.`);
-    }
-    return;
+function ensurePackaged() {
+  const packagedManifest = join(packagedDir, "plugin.json");
+  if (!existsSync(packagedManifest)) {
+    fail(`${relative(repoRoot, packagedDir)} does not exist. Run the plugin's package script first.`);
   }
-  const packaged = join(repoRoot, "dist", `${manifest.id}-${manifest.version}`);
-  if (!existsSync(packaged)) {
-    fail(`${manifest.id} is not installed in ${pluginsDir} and ${relative(repoRoot, packaged)} does not exist. Run the plugin's package script first.`);
+  const packaged = JSON.parse(readFileSync(packagedManifest, "utf8"));
+  if (packaged.frontend?.entryModule !== "./frontend/index.js") {
+    fail(`${packagedManifest} has frontend.entryModule "${packaged.frontend?.entryModule}"; expected "./frontend/index.js". Package again.`);
   }
-  cpSync(packaged, installedDir, { recursive: true });
-  console.log(`Installed ${relative(repoRoot, packaged)} into ${installedDir}. Restart Queryeer once so it discovers the plugin.`);
-}
-
-function defaultPluginsDir() {
-  // Electron userData for app name "queryeer-desktop" (app.setName in Queryeer's main process) + "/plugins"
-  if (process.platform === "win32") {
-    return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "queryeer-desktop", "plugins");
-  }
-  if (process.platform === "darwin") {
-    return join(homedir(), "Library", "Application Support", "queryeer-desktop", "plugins");
-  }
-  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "queryeer-desktop", "plugins");
 }
 
 function fail(message) {
