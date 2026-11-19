@@ -1,7 +1,7 @@
 {
   "name": "@queryeer-plugins/mongodb-frontend",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "build": "esbuild src/index.ts --bundle --format=esm --jsx=automatic --target=es2022 --external:react --external:react-dom --loader:.css=text --outfile=dist/index.js",

@@ -3,7 +3,7 @@
   "schemaVersion": 1,
   "id": "com.queryeer.mongodb",
   "name": "MongoDB",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Native MongoDB query engine for Queryeer Desktop",
   "backend": {
     "entrypointClass": "com.queryeer.plugin.mongodb.MongoBackendPlugin",
