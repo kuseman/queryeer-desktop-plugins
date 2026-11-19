@@ -32,12 +32,12 @@ Priority:
 | F3 Open Settings at a setting | P2 | ✅ Fixed in core: `settings.open(settingId?)`. MongoDB's ⚙ action and empty state use it. |
 | F4 One call to register a file type | P2 | Open |
 | F5 Monaco language features | P2 | Partly fixed in core (`0b1819f`): `editorLanguages.registerLanguage({ id, aliases, monarch, configuration })`, a plugin-defined language without validation. Completion, hover and diagnostics are still open (needs design). |
-| F6 Inconsistent `Disposable` returns | P2 | Open, 0.20.0 |
+| F6 Inconsistent `Disposable` returns | P2 | ✅ Fixed in core (working tree, 2026-11-18): every `register*`, `subscribe` and `on*` returns a `Disposable`. Breaking: MongoDB must move when it builds against 0.20.0 |
 | F7 Late settings registration | P2 | ✅ Fixed in core: `registerSettings` refreshes by itself. |
 | F8 ID helpers | P3 | Open |
 | F9 `@queryeer/api` version | P3 | ✅ Handled by the release workflow: `create-release.yml` sets `@queryeer/api` to the release version, and since `e0eb735` also the examples' and `DEVELOPMENT-PLUGIN.md`'s ranges. The next release must be a **minor** one (0.19.0). |
-| F10 `invoke` return shape | P3 | Open, 0.20.0 |
-| F11 Plugin identity declared twice | P3 | Open, 0.20.0 |
+| F10 `invoke` return shape | P3 | ✅ Documented in core (working tree, 2026-11-18): `DEVELOPMENT-PLUGIN.md` §7.8 and the `invoke` doc comment |
+| F11 Plugin identity declared twice | P3 | ✅ Fixed in core (working tree, 2026-11-18): identity only in `plugin.json`; `ExternalPluginManifest` has no `id`/`name`/`version`/`description` |
 | F13 Persistence hook drops a pending save | P2 | ✅ Fixed in core: the hook flushes pending items on unmount and always calls the latest `persist`. MongoDB's workaround removed. |
 | F14 New-file list ignores plugin file types | P1 | ✅ Fixed in core: types the setting doesn't mention are appended as enabled, and per-type New commands are registered lazily when the File menu is built. Cause 3 (menu rebuild) was already handled: bootstrap rebuilds the menu after `host.start`. |
 | F15 `settings.open(id)` ignored after a search | P2 | ✅ Fixed in core: a pending request first clears the search and resolves only against the unfiltered tree. |
@@ -51,7 +51,7 @@ Priority:
 | F23 Plugins cannot store a secret | P3 | Open |
 | F24 `@outline-pattern` only works for core's own text types | P2 | Open |
 | F25 No charts or live dashboards | P2 | Open (needs design): proposal in [`specs/core-timeseries.md`](specs/core-timeseries.md) |
-| F26 No public API for a JDBC dialect's frontend | P1 | Items 1–4 fixed in core (`feat/plugin-api-0.20`): forms from the backend dialect's fields, `context.jdbcDialects`, and the template registries `context.jdbcTreeActions`, `context.symbolActions`, `context.whenExpressions` (4 in `9903535`). Item 5 (plan toggle) fixed in the working tree with no new API. Open: 6. 0.20.0 |
+| F26 No public API for a JDBC dialect's frontend | P1 | Items 1–4 fixed in core (`feat/plugin-api-0.20`): forms from the backend dialect's fields, `context.jdbcDialects`, and the template registries `context.jdbcTreeActions`, `context.symbolActions`, `context.whenExpressions` (4 in `9903535`). Item 5 (plan toggle) fixed in the working tree with no new API. Item 6 moved to F28 (Phase 0.4), decided 2026-11-18. |
 | F27 External JDBC drivers cannot be managed | P1 | ✅ Fixed in core (`bc6f890`): any registered driver, after the user approves its first install. Checked by hand on 2026-11-17 with the MySQL plugin: installed from a zip, driver approved and downloaded from the UI, queries against MariaDB 11.8, no jar copied by hand |
 | F28 Engine-specific API lives in `@queryeer/api` | P1 | Open, with the JDBC move (Phase 0.4). Until then, no new engine-specific members on `PluginContext` |
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
@@ -125,6 +125,11 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
   - `commands.registerCommand`
 - **Consequence:** `deactivate` cannot clean up consistently.
 - **Suggestion:** return a `Disposable` from every `register*`.
+- **Decided (2026-11-18):**
+  - Every `register*`, `subscribe` and `on*` reachable from `PluginContext` returns a `Disposable`, including the `subscribe` methods and `fileMediator.onActiveFileChanged`, which returned an unsubscribe function, and the assistant's `register*Contribution`. 0.20.0 breaks anyway, so authors adapt once.
+  - Disposing removes the registration, unless a later one with the same id replaced it. Disposing twice does nothing. The UI isn't required to update when a contribution is removed: plugins are only deactivated when the app quits. Live removal can come with D1.
+- **Fixed in core (working tree on `feat/plugin-api-0.20`):** about 40 methods. Shared helpers in `core/plugin-runtime/disposables.ts`. Documented at the start of `DEVELOPMENT-PLUGIN.md` §7.
+- **For this repository, when MongoDB moves to `@queryeer/api` 0.20:** `MongoConnectionView.tsx` and `MongoQueryBar.tsx` call the functions `settings.subscribe` and `files.subscribe` returned; they must call `dispose()` instead. Until then, MongoDB built against 0.19 throws in those components' effect cleanup on a 0.20 app, so MongoDB needs a release for 0.20.0. `plugin.tsx` already handles both shapes. Decided 2026-11-18: no compatibility shim in core (nobody uses MongoDB yet); MongoDB moves when 0.20.0 is released.
 
 ### F7 (P2): Late settings registration has no public refresh
 - **Activate-time registration works:** settings registered during `activate` work because bootstrap calls `refreshSchemaFromRegistry()` and `syncRegistryModules()` after `host.start` (`renderer/shell/bootstrap.ts`).
@@ -153,6 +158,12 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **What the host checks:** that the IDs match (`plugins/discovery.ts`), but not the versions. The plugin's version also lives in the backend `pom.xml`.
 - **Workaround here:** the packaging script checks that `pom.xml` and `plugin.json` agree. The frontend manifest version is maintained by hand.
 - **Suggestion:** let the host fill the frontend manifest's `id`/`name`/`version` from `plugin.json` (it already overwrites `plugin.manifest` with the module manifest), so the frontend only declares `kind` and `dependencies`.
+- **Decided (2026-11-18):** `plugin.json` is the only source of an external plugin's identity: `id`, `name`, `version` and `description`.
+  - `ExternalPluginManifest` (new, with `ExternalPlugin` and `ExternalPluginModule`) has no such fields, so setting them doesn't compile against 0.20.
+  - A plugin built for 0.19 that still sets them loads; the values are ignored, with a console warning for any that differ. A first version refused a mismatch, which broke a user's plugin whose frontend name differed from `plugin.json`; the user chose a single source over a check.
+  - The frontend `dependencies` stay in the frontend manifest: they are frontend plugin ids, while `plugin.json`'s are backend ids with versions.
+  - `context.plugin` (`id`, `name`, `version`, `description`, new) gives a plugin its own identity at runtime, so it doesn't hard-code its id for a settings `moduleId` or metadata keys.
+- **For this repository, when MySQL and MongoDB move to `@queryeer/api` 0.20:** drop `id`, `name`, `version` and `description` from their frontend manifests and type them as `ExternalPlugin` / `ExternalPluginModule`. Read the id from `context.plugin.id` where the `PLUGIN_ID` constants are used, and add `plugin` to the test fixtures that cast to `PluginContext` (they would throw, and the casts hide it from the compiler). The packaging check of `pom.xml` against `plugin.json` stays.
 
 ### F13 (P2): Persistence hook drops a pending save on unmount
 - **Behaviour:** `useCollectionSettingsPersistence` clears its debounce timer on unmount instead of flushing it (`core.settings/CollectionSettingsListEditor.tsx`, the `useEffect` cleanup calls `clearTimer`).
@@ -304,6 +315,7 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
      - ✅ **Fixed in core (working tree, 2026-11-18), with no new API:** both providers did the same thing (on a normal run with the toggle on, intent `plan.actual` and a plan graph request), and Estimated Plan was already core's for every dialect. So `core.queryengine.jdbc` now applies the toggle for every dialect registered with `supportsQueryPlan`; PostgreSQL's provider is gone, and SQL Server's only adds its plan XML option. A dialect sets `supportsQueryPlan` and implements `JdbcDialect.queryPlanExecutor()` in its backend. That also follows F28's rule: no new engine-specific `PluginContext` member.
      - The MySQL dialect doesn't use it yet: its backend has no `queryPlanExecutor()`. Covered by a core test with an external dialect id.
   6. **Less urgent:** `registerJdbcTreeNodeContributor` (tree icons; internal, not on the context, no callers); a settings `setValue` plus `initJdbcFileBinding` for welcome flows that create a connection (SQLite's .db welcome editor); SQL Server's `getExpressionRuntime` and `getCoreSettingsService` uses.
+     - **Moved to F28 (decided 2026-11-18):** not in 0.20.0. Most of it would add JDBC-specific API to `PluginContext`, which F28 avoids until the JDBC family is its own package (Phase 0.4). There, each item shows up as an import that doesn't compile.
 - **Plan:** build the MySQL frontend against core's working tree; items 1–3 are needed for its connection form, 4 and 5 for the editor features. Each becomes public API in `@queryeer/api`, and the built-in dialects move to it, which proves it.
 - **Items 1–3 fixed in core** (branch `feat/plugin-api-0.20`, 2026-11-17), with the design decided that day: **the form comes from the backend dialect's fields.**
   - `JdbcDialect.connectionSetup()` returns the fields (`JdbcConnectionSetupDefinition`, which the built-in dialects already defined but nothing read). `jdbc.connection.dialects` includes them, and the JDBC settings editor renders the form, stores defaults, and derives validation (required, visible fields) and the subtitle from them. This replaces the hard-coded `host`/`port`/`database`/`filePath` rules (item 2) and the copied CSS (item 3).
@@ -311,7 +323,7 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
   - Built-in dialects moved: PostgreSQL's hand-written form is deleted (rendered from its fields); SQLite and SQL Server register through `context.jdbcDialects` and keep their forms.
   - The MySQL dialect here has no frontend code: its backend defines the fields (host, port 3306, database, username, password, SSL mode), and `npm run mysql:smoke` checks they reach the frontend.
   - Docs: core's `DEVELOPMENT-PLUGIN.md` §7.12.1.
-  - **Follow-up:** SQL Server keeps its form because `visibleWhen` takes one value per field (username and password show for two authentication types) and some options are Windows-only. A list of values per `visibleWhen` entry and per-platform options would let it move too.
+  - **Follow-up, done 2026-11-19 in core's working tree:** `visibleWhen` takes a list of values per field (Java `Map<String, List<String>>`, TS `Record<string, string[]>`; the frontend also reads a single string). Per-platform options need no API: the backend runs on the user's machine, so `SqlServerConnectionSetup` leaves out Windows Native Authentication elsewhere, and a stored value that is no longer offered still shows in its `SELECT`. SQL Server's hand-written form is deleted; only SQLite (file picker) keeps one. Breaking for dialects compiled against the 0.20.0 snapshot that set `visibleWhen` (none outside core; the MySQL dialect passes `null`).
 - **Backend side:** works today. The dialect registers with `JdbcRuntimeService` through the JDBC engine's exports, with a version range on `queryengine.jdbc` (`npm run mysql:smoke`).
 - **Also:** the SQL parser has no MySQL grammar (`sqlGrammarId` falls back to `postgres`). Not blocking; completion and highlighting are approximate.
 
@@ -338,6 +350,7 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
   - `queryengine/Jdbc*.ts`, `queryengine/PayloadbuilderCatalogExtension.ts`, `settings/TreeAction*.ts`
   - `JdbcEngineState`, `PayloadbuilderEngineState` and the `JdbcSchema*` / `JdbcConnectionSession*` types in `backend/Types.ts`
 - **Stays in core:** `context.symbolActions` and `context.whenExpressions` (every engine uses them), and the driver methods on `appShell` (the main process owns `libShared`, and drivers are process-wide; [`specs/v1-milestone.md`](specs/v1-milestone.md) §5).
+- **Also covers F26 item 6:** the tree-node icon contributor, settings `setValue` plus `initJdbcFileBinding` for welcome flows that create a connection, and SQL Server's `getExpressionRuntime` and `getCoreSettingsService` uses.
 - **Blocked by:** a public plugin-to-plugin service API in the frontend plugin context. Without it, split packages would only move type files: the objects would still come from core's `PluginContext`.
 - **How it is found (decided 2026-11-18):** the JDBC and payloadbuilder frontends first become their own workspace packages in core, compiled against `@queryeer/api` and their engine's API package alone. Every import that no longer compiles is recorded here. See [`specs/v1-milestone.md`](specs/v1-milestone.md) Phase 0.4.
 - **Suggested fix (Phase 0.4):**
