@@ -1,4 +1,5 @@
-import type { Plugin, PluginContext } from "@queryeer/api/plugin/Plugin";
+import type { PluginContext } from "@queryeer/api/plugin/Plugin";
+import type { ExternalPlugin } from "@queryeer/api/plugin/PluginModule";
 import type { Disposable } from "@queryeer/api/editor/EditorApi";
 import type { CSSProperties } from "react";
 import { buildEngineState, readSelectedDatabase, resolveConnection } from "./binding.js";
@@ -30,16 +31,12 @@ import styles from "./styles.css";
 
 const STYLE_ELEMENT_ID = "com-queryeer-mongodb-styles";
 
-/** Registrations that return a Disposable. Several host APIs return nothing yet (API-GAPS.md F6) and live until restart. */
-let disposables: Array<Disposable | (() => void)> = [];
+/** Registrations to undo on deactivate. */
+let disposables: Disposable[] = [];
 
-export const mongoPlugin: Plugin = {
+export const mongoPlugin: ExternalPlugin = {
   manifest: {
-    id: PLUGIN_ID,
-    name: "MongoDB",
-    version: "0.1.0",
     kind: "feature",
-    description: "Native MongoDB query engine",
     dependencies: ["core.queryengine", "core.settings", "core.files"]
   },
 
@@ -52,11 +49,7 @@ export const mongoPlugin: Plugin = {
 
   deactivate: () => {
     for (const disposable of disposables) {
-      if (typeof disposable === "function") {
-        disposable();
-      } else {
-        disposable.dispose();
-      }
+      disposable.dispose();
     }
     disposables = [];
     document.getElementById(STYLE_ELEMENT_ID)?.remove();
