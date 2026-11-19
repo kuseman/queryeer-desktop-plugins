@@ -12,6 +12,6 @@
   "frontend": {
     "entryModule": "./frontend/dist/index.js",
     "moduleFormat": "esm",
-    "apiVersion": "^0.19.0"
+    "apiVersion": ">=0.20.0 <1.0.0"
   }
 }
