@@ -65,12 +65,12 @@ export function MongoQueryBar({ context, fileId }: { context: PluginContext; fil
   const [, setVersion] = useState(0);
   const rerender = useCallback(() => setVersion((v) => v + 1), []);
   useEffect(() => {
-    const unsubscribeFiles = context.files.subscribe(rerender);
-    const unsubscribeSettings = context.settings.subscribe(rerender);
+    const filesSubscription = context.files.subscribe(rerender);
+    const settingsSubscription = context.settings.subscribe(rerender);
     const unsubscribeExplorer = subscribeExplorer(rerender);
     return () => {
-      unsubscribeFiles();
-      unsubscribeSettings();
+      filesSubscription.dispose();
+      settingsSubscription.dispose();
       unsubscribeExplorer();
     };
   }, [context, rerender]);
