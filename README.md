@@ -19,6 +19,7 @@ queryeer-desktop-plugins/
   mvnw, .mvn/           Maven wrapper
   plugins/
     mongodb/            plugin.json, backend/ (Maven module), frontend/ (npm workspace), README
+    mysql/              MySQL and MariaDB dialect for the JDBC engine; same layout
     elasticsearch/      (planned)
   shared/
     schema/             vendored copy of Queryeer's plugin.json v1 schema
@@ -36,6 +37,7 @@ Each plugin's README has a **Building** section, for example [MongoDB](plugins/m
 The vendored schema in `shared/schema/` must be refreshed whenever Queryeer changes `plugin-schema/plugin.json.schema.v1.json`.
 
 - **Versions:** each plugin is versioned independently, in its own `plugin.json` (SemVer).
+- **Ranges on Queryeer:** the plugins here accept every Queryeer from the one they need up to 1.0, e.g. `">=0.20.0 <1.0.0"` on `queryengine.jdbc` and in `frontend.apiVersion`, rather than `^0.20.0`, which would need a plugin release for each core minor version. They are maintained alongside core and run against each new core in development, where ranges aren't enforced anyway. The cost: a core change that breaks a plugin shows as a runtime error rather than a clean skip. So before a core release, build and test the plugins against it (`npm run <plugin>:test` with `queryeer.backend.version` and `@queryeer/api` bumped). Raise the lower bound when a plugin starts using something newer.
 - **Tags:** `<short-name>/v<semver>`, e.g. `mongodb/v0.1.0`.
 - **Release assets:** `<plugin-id>-<version>.zip` plus `<plugin-id>-<version>.zip.sha256`, e.g. `com.queryeer.mongodb-0.1.0.zip`. Each tag gets its own GitHub Release; prereleases use GitHub's prerelease flag.
 - **CI:** one workflow per plugin, filtered by path, so a change under `plugins/mongodb/**` builds and tests only MongoDB ([mongodb.yml](.github/workflows/mongodb.yml): typecheck, unit tests, Testcontainers tests, package and verify; the ZIP is uploaded as a build artifact). A tag push builds only the tagged plugin (see Releasing below).
