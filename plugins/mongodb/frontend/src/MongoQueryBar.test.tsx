@@ -86,12 +86,12 @@ async function mount(editor: EditorHandle): Promise<void> {
       },
       subscribe: (listener: () => void) => {
         fileListeners.add(listener);
-        return () => fileListeners.delete(listener);
+        return { dispose: () => fileListeners.delete(listener) };
       }
     },
     settings: {
       getValue: (id: string) => (id === CONNECTIONS_SETTING_ID ? [{ connectionId: "c1", hosts: "localhost:27017" }] : undefined),
-      subscribe: () => () => {}
+      subscribe: () => ({ dispose() {} })
     },
     editors: { getActiveEditor: () => editor, onActiveEditorChanged: () => ({ dispose() {} }) },
     commands: { executeCommand },

@@ -14,8 +14,8 @@ import { clearExplorerCache } from "./MongoExplorer.js";
 const file = { fileId: "f1", engineBinding: { engineId: "mongodb", connectionId: "c1" } } as unknown as FileEntity;
 const invoke = vi.fn(async ({ action }: { action: string }) => (action === ACTION_DATABASES ? ["shop"] : []));
 const context = {
-  settings: { getValue: (id: string) => (id === CONNECTIONS_SETTING_ID ? [{ connectionId: "c1", hosts: "localhost" }] : undefined), subscribe: () => () => {} },
-  files: { getFile: () => file, getEditorState: () => undefined, subscribe: () => () => {} },
+  settings: { getValue: (id: string) => (id === CONNECTIONS_SETTING_ID ? [{ connectionId: "c1", hosts: "localhost" }] : undefined), subscribe: () => ({ dispose() {} }) },
+  files: { getFile: () => file, getEditorState: () => undefined, subscribe: () => ({ dispose() {} }) },
   queryEngines: { invoke }
 } as unknown as PluginContext;
 

@@ -50,12 +50,12 @@ function useMongoFileState(context: PluginContext, file: FileEntity | undefined)
   const rerender = useCallback(() => setVersion((v) => v + 1), []);
 
   useEffect(() => {
-    const unsubscribeSettings = context.settings.subscribe(rerender);
-    const unsubscribeFiles = context.files.subscribe(rerender);
+    const settingsSubscription = context.settings.subscribe(rerender);
+    const filesSubscription = context.files.subscribe(rerender);
     cacheListeners.add(rerender);
     return () => {
-      unsubscribeSettings();
-      unsubscribeFiles();
+      settingsSubscription.dispose();
+      filesSubscription.dispose();
       cacheListeners.delete(rerender);
     };
   }, [context, rerender]);
