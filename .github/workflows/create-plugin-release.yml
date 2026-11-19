@@ -15,6 +15,7 @@ on:
         type: choice
         options:
           - mongodb
+          - mysql
       increment:
         description: Version component to increment (ignored for a plugin's first release, which uses plugin.json's version)
         required: true
