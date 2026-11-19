@@ -184,7 +184,8 @@ Work in Queryeer Desktop. Nothing moves yet.
 - **Status (2026-11-19): D1 and D2 implemented in core's working tree, for 0.20.0** (decided with the user: in 0.20.0, not later).
   - D1: `QUERYEER_DEV_PLUGINS` lists plugin folders loaded in place. The backend loads copies made on each start, which also covers D3 for these folders.
   - D2: the command `core.backend.restartAndReload` restarts the backend and reloads the window.
-  - Not yet checked by hand with the MySQL dialect. D4 (watch mode) is still open.
+  - Checked by hand 2026-11-19 with the MySQL dialect, which meets the exit criterion. A temporary change to each half was packaged while Queryeer ran, with no locked jars. Restart Backend and Reload showed the backend change. Under core's `npm run dev`, Vite had already reloaded the window for the frontend change.
+  - D4 (watch mode): frontend changes are covered under `npm run dev` by Vite's reload. A watcher with a "restart backend" toast was judged not worth it. Instead, Restart Backend and Reload sits in the status bar while developer folders are set.
 
 ### Phase 1: move the JDBC family
 
