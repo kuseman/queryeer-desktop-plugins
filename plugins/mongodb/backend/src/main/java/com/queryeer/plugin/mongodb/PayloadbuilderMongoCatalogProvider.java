@@ -15,8 +15,8 @@ import se.kuseman.payloadbuilder.catalog.mongodb.MongoCatalog;
  * plugin's settings and handed to payloadbuilder's {@link MongoCatalog} as a connection string with credentials.
  *
  * <p>
- * Payloadbuilder's catalog builds its own client from a connection string, so a connection that allows invalid TLS certificates (which needs an SSLContext) can't be used yet: it fails with a
- * message saying so. Table and column completion isn't offered, because Queryeer doesn't export the system-table editor services to plugins yet.
+ * Payloadbuilder's catalog builds its own client from these properties; a TLS connection that allows invalid certificates also sets {@link MongoCatalog#TLS_ALLOW_INVALID_CERTIFICATES_KEY}
+ * (payloadbuilder 1.16). Table and column completion isn't offered, because Queryeer doesn't export the system-table editor services to plugins yet.
  * </p>
  */
 final class PayloadbuilderMongoCatalogProvider implements PayloadbuilderCatalogProviderContributor
@@ -66,14 +66,13 @@ final class PayloadbuilderMongoCatalogProvider implements PayloadbuilderCatalogP
             // Not found, disabled, or no password: a problem with the file's catalog setup, not an internal error
             throw new IllegalArgumentException("Catalog '" + alias + "': " + e.getMessage(), e);
         }
-        if (connection.tlsAllowInvalidCertificates())
-        {
-            throw new IllegalArgumentException("Catalog '" + alias
-                                               + "': MongoDB connection \""
-                                               + connection.displayName()
-                                               + "\" allows invalid TLS certificates, which payloadbuilder's mongodb catalog doesn't support yet. Use a connection that validates certificates.");
-        }
         session.setCatalogProperty(alias, MongoCatalog.CONNECTIONSTRING_KEY, catalogConnectionString(connection));
+        if (connection.tls()
+                && connection.tlsAllowInvalidCertificates())
+        {
+            // As the plugin's own client: trust any certificate and host name, only on a TLS connection
+            session.setCatalogProperty(alias, MongoCatalog.TLS_ALLOW_INVALID_CERTIFICATES_KEY, true);
+        }
         if (connection.username() != null)
         {
             session.setCatalogProperty(alias, MongoCatalog.AUTH_USERNAME_KEY, connection.username());
@@ -107,5 +106,6 @@ final class PayloadbuilderMongoCatalogProvider implements PayloadbuilderCatalogP
         session.setCatalogProperty(alias, MongoCatalog.AUTH_USERNAME_KEY, (Object) null);
         session.setCatalogProperty(alias, MongoCatalog.AUTH_PASSWORD_KEY, (Object) null);
         session.setCatalogProperty(alias, MongoCatalog.AUTH_DATABASE_KEY, (Object) null);
+        session.setCatalogProperty(alias, MongoCatalog.TLS_ALLOW_INVALID_CERTIFICATES_KEY, (Object) null);
     }
 }

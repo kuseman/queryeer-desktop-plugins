@@ -84,6 +84,30 @@ class PayloadbuilderMongoCatalogTest
         assertEquals("app", session.get(MongoCatalog.AUTH_USERNAME_KEY));
         assertEquals("s3cret", session.get(MongoCatalog.AUTH_PASSWORD_KEY));
         assertEquals("admin", session.get(MongoCatalog.AUTH_DATABASE_KEY));
+        assertNull(session.get(MongoCatalog.TLS_ALLOW_INVALID_CERTIFICATES_KEY));
+    }
+
+    @Test
+    void trustsInvalidCertificatesOnlyForATlsConnectionThatAllowsThem()
+    {
+        MongoClientCache clients = new MongoClientCache(config(Map.of("connectionId", "lab", "hosts", "lab:27017", "tls", true, "tlsAllowInvalidCertificates", true),
+                // Not possible from the settings editor, but the flag means nothing without TLS, as for the plugin's own client
+                Map.of("connectionId", "plain", "hosts", "plain:27017", "tls", false, "tlsAllowInvalidCertificates", true)), logger(new ArrayList<>()));
+        PayloadbuilderMongoCatalogProvider provider = new PayloadbuilderMongoCatalogProvider(clients);
+        Map<String, Object> lab = new HashMap<>();
+        Map<String, Object> plain = new HashMap<>();
+
+        provider.injectProperties(session(lab), "mongo", Map.of("connectionId", "lab"));
+        provider.injectProperties(session(plain), "mongo", Map.of("connectionId", "plain"));
+
+        assertEquals("mongodb://lab:27017/?tls=true", lab.get(MongoCatalog.CONNECTIONSTRING_KEY));
+        assertEquals("true", lab.get(MongoCatalog.TLS_ALLOW_INVALID_CERTIFICATES_KEY));
+        assertEquals("mongodb://plain:27017/", plain.get(MongoCatalog.CONNECTIONSTRING_KEY));
+        assertNull(plain.get(MongoCatalog.TLS_ALLOW_INVALID_CERTIFICATES_KEY));
+
+        // Switching the alias to another connection drops the flag
+        provider.injectProperties(session(lab), "mongo", Map.of("connectionId", "plain"));
+        assertNull(lab.get(MongoCatalog.TLS_ALLOW_INVALID_CERTIFICATES_KEY));
     }
 
     @Test
@@ -101,18 +125,14 @@ class PayloadbuilderMongoCatalogTest
     @Test
     void saysWhyAConnectionCantBeUsed()
     {
-        MongoClientCache clients = new MongoClientCache(config(Map.of("connectionId", "insecure", "title", "Lab", "hosts", "lab:27017", "tls", true, "tlsAllowInvalidCertificates", true),
-                Map.of("connectionId", "off", "hosts", "off:27017", "enabled", false)), logger(new ArrayList<>()));
+        MongoClientCache clients = new MongoClientCache(config(Map.of("connectionId", "off", "hosts", "off:27017", "enabled", false)), logger(new ArrayList<>()));
         PayloadbuilderMongoCatalogProvider provider = new PayloadbuilderMongoCatalogProvider(clients);
         IQuerySession session = session(new HashMap<>());
 
-        IllegalArgumentException insecure = assertThrows(IllegalArgumentException.class, () -> provider.injectProperties(session, "mongo", Map.of("connectionId", "insecure")));
         IllegalArgumentException disabled = assertThrows(IllegalArgumentException.class, () -> provider.injectProperties(session, "mongo", Map.of("connectionId", "off")));
         // E.g. a file from before this plugin, whose connection was one of Queryeer's own MongoDB connections
         IllegalArgumentException unknown = assertThrows(IllegalArgumentException.class, () -> provider.injectProperties(session, "mongo", Map.of("connectionId", "core-connection")));
 
-        assertTrue(insecure.getMessage()
-                .contains("allows invalid TLS certificates"), insecure.getMessage());
         assertTrue(disabled.getMessage()
                 .startsWith("Catalog 'mongo': ")
                 && disabled.getMessage()

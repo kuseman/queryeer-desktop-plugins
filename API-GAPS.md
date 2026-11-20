@@ -58,7 +58,7 @@ Priority:
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
 | B5 Plugin catalogs get no SQL editor services | P2 | Open, planned for core 0.22 (decided 2026-11-20). MongoDB's `mongodb` catalog ships without table/column completion until then |
-| P1 Payloadbuilder's Mongo catalog can't trust invalid certificates | P3 | Open, planned for payloadbuilder 1.16 (decided 2026-11-20). MongoDB's catalog refuses such a connection with a message |
+| P1 Payloadbuilder's Mongo catalog can't trust invalid certificates | P3 | ✅ Fixed in payloadbuilder 1.16.0: catalog property `tlsAllowInvalidCertificates`, which MongoDB's catalog sets (2026-11-20) |
 | B4 Runner working directory | P3 | ✅ Fixed in core: `queryeer.builtins.dir` / `QUERYEER_BUILTINS_DIR`. MongoDB's smoke test uses it. |
 | D1 Developer plugin folders | P1 | ✅ Fixed in core (working tree, 2026-11-19): `QUERYEER_DEV_PLUGINS`, `DEVELOPMENT-PLUGIN.md` §8.4 |
 | D2 Public backend restart | P1 | ✅ Fixed in core (working tree, 2026-11-19): command `core.backend.restartAndReload` (Restart Backend and Reload), which reloads the window after the restart |
@@ -390,8 +390,7 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 
 ### P1 (P3): Payloadbuilder's Mongo catalog can't trust invalid certificates
 - **Behaviour:** payloadbuilder's `MongoCatalog` builds its own client from a connection string. Trusting invalid TLS certificates needs an `SSLContext` in the Java driver, which a connection string can't express, so a MongoDB connection with "Allow invalid certificates" can't serve the catalog.
-- **Workaround here:** none; `PayloadbuilderMongoCatalogProvider` refuses such a connection with a message saying so.
-- **Suggestion (payloadbuilder 1.16):** a catalog property (e.g. `tlsAllowInvalidCertificates`) that `MongoClientHolder` turns into a trust-all `SSLContext`, part of the client cache key; the plugin then passes it.
+- **Fixed (payloadbuilder 1.16.0):** catalog property `MongoCatalog.TLS_ALLOW_INVALID_CERTIFICATES_KEY`, which `MongoClientHolder` turns into a trust-all `SSLContext` (part of the client cache key, never turning TLS on by itself). `PayloadbuilderMongoCatalogProvider` sets it for a TLS connection that allows invalid certificates, as the plugin's own client does. The plugin bundles the 1.16 catalog; its `payloadbuilder-api` comes from Queryeer and changed only in javadoc since 1.15, so Queryeer 0.21 (which ships 1.15) is fine.
 
 ## Developer experience
 
