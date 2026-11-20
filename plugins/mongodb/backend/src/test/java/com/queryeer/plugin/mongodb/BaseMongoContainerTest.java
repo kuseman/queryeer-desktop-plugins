@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.net.URI;
+import java.io.StringWriter;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,6 +45,12 @@ import com.queryeer.backend.api.OutputSeverity;
 import com.queryeer.backend.api.SecuritySessionClosedException;
 import com.queryeer.backend.api.SettingsModule;
 import com.queryeer.backend.contract.query.QueryExecuteOptions;
+
+import se.kuseman.payloadbuilder.core.JsonOutputWriter;
+import se.kuseman.payloadbuilder.core.Payloadbuilder;
+import se.kuseman.payloadbuilder.core.QueryResult;
+import se.kuseman.payloadbuilder.core.catalog.CatalogRegistry;
+import se.kuseman.payloadbuilder.core.execution.QuerySession;
 
 /**
  * Runs the provider against a real MongoDB server. Skipped when Docker is not available. Each supported server version has a subclass that names its image (e.g. {@link Mongo80ContainerTest}); every
@@ -115,6 +122,31 @@ abstract class BaseMongoContainerTest
         seedClient.getDatabase("other")
                 .getCollection("things")
                 .insertOne(Document.parse("{ \"_id\": \"t1\", \"kind\": \"other\" }"));
+    }
+
+    @Test
+    void payloadbuilderQueriesThroughThePluginsCatalogAndConnection()
+    {
+        // The plugin's mongodb catalog with payloadbuilder's catalog code and this plugin's driver: catches a driver upgrade that breaks the catalog
+        PayloadbuilderMongoCatalogProvider catalogProvider = new PayloadbuilderMongoCatalogProvider(clientCache);
+        CatalogRegistry registry = new CatalogRegistry();
+        registry.registerCatalog("mongo", catalogProvider.createCatalog());
+        QuerySession session = new QuerySession(registry);
+        catalogProvider.injectProperties(session, "mongo", Map.of("connectionId", "local"));
+
+        QueryResult result = Payloadbuilder.compile(session, "select x._id, x.total from mongo#shop.orders x where x.status = 'open' order by x._id")
+                .execute(session);
+        StringWriter json = new StringWriter();
+        JsonOutputWriter writer = new JsonOutputWriter(json);
+        while (result.hasMoreResults())
+        {
+            result.writeResult(writer);
+        }
+        writer.close();
+
+        // One JSON object per row
+        assertEquals("{\"_id\":1,\"total\":10}{\"_id\":3,\"total\":30}{\"_id\":4,\"total\":40}", json.toString()
+                .replaceAll("\s", ""));
     }
 
     @AfterAll

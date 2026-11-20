@@ -120,7 +120,7 @@ final class MongoClientCache implements AutoCloseable
         clients.clear();
     }
 
-    private String resolvePassword(MongoConnectionSettings settings)
+    String resolvePassword(MongoConnectionSettings settings)
     {
         if (settings.username() == null)
         {

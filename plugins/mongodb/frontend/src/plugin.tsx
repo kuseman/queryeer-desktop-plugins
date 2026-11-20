@@ -27,6 +27,7 @@ import { MongoQueryBar } from "./MongoQueryBar.js";
 import { MONGO_LANGUAGE_ID, mongoLanguage } from "./mongoLanguage.js";
 import { mongoOutline } from "./mongoOutline.js";
 import { PlanActions } from "./planActions.js";
+import { PAYLOADBUILDER_PLUGIN_ID, registerPayloadbuilderCatalog } from "./payloadbuilderCatalog.js";
 import styles from "./styles.css";
 
 const STYLE_ELEMENT_ID = "com-queryeer-mongodb-styles";
@@ -37,7 +38,8 @@ let disposables: Disposable[] = [];
 export const mongoPlugin: ExternalPlugin = {
   manifest: {
     kind: "feature",
-    dependencies: ["core.queryengine", "core.settings", "core.files"]
+    // Payloadbuilder is optional: with it, the plugin's connections also serve its mongodb catalog (needs Queryeer 0.21)
+    dependencies: ["core.queryengine", "core.settings", "core.files", { id: PAYLOADBUILDER_PLUGIN_ID, optional: true }]
   },
 
   activate: (context) => {
@@ -45,6 +47,10 @@ export const mongoPlugin: ExternalPlugin = {
     registerFileType(context);
     registerSettings(context);
     registerEngine(context);
+    const catalog = registerPayloadbuilderCatalog(context);
+    if (catalog) {
+      disposables.push(catalog);
+    }
   },
 
   deactivate: () => {
