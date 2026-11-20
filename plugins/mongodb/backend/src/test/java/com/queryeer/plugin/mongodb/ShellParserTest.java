@@ -58,6 +58,11 @@ class ShellParserTest
             db.reports.monthly.find()                                               | { find: 'reports.monthly', filter: {} }
             db.getCollection('reports.monthly').find()                              | { find: 'reports.monthly', filter: {} }
             db.getCollection('system.profile').find().sort({ ts: -1 })              | { find: 'system.profile', filter: {}, sort: { ts: -1 } }
+            db['proto-pricehistory'].countDocuments({ contractVersion: { $lt: 2 } })| { count: 'proto-pricehistory', query: { contractVersion: { $lt: 2 } } }
+            db [ "price history" ] . find()                                         | { find: 'price history', filter: {} }
+            db["it's \\"quoted\\""].find()                                         | { find: 'it\\'s "quoted"', filter: {} }
+            db.reports['monthly-2026'].find()                                       | { find: 'reports.monthly-2026', filter: {} }
+            db['reports'].monthly.find()                                            | { find: 'reports.monthly', filter: {} }
             db.runCommand({ dbStats: 1 })                                           | { dbStats: 1 }
             db.stats()                                                              | { dbStats: 1 }
             db.getCollectionNames()                                                 | { listCollections: 1, nameOnly: true }
@@ -121,6 +126,9 @@ class ShellParserTest
 
         assertEquals("admin", only("db.adminCommand({ ping: 1 })").database());
         assertEquals("other", only("db.getSiblingDB(\"other\").runCommand({ ping: 1 })").database());
+        ParsedCommand bracket = only("db.getSiblingDB('reports')['monthly-2026'].find()");
+        assertEquals("reports", bracket.database());
+        assertEquals(BsonDocument.parse("{ find: 'monthly-2026', filter: {} }"), bracket.command());
         assertNull(only("db.orders.find()").database());
     }
 
@@ -224,6 +232,12 @@ class ShellParserTest
             db.runCommand()                                  | db.runCommand() needs the command document, e.g. db.runComman  | 1 | 4
             db.runCommand('ping')                            | runCommand() expects the command document as a document        | 1 | 4
             db.getCollection(5).find()                       | getCollection() expects the collection name as a string        | 1 | 4
+            db.'proto-pricehistory'.find()                   | A quoted name can't follow a dot. Quote collection names that  | 1 | 4
+            db.proto-pricehistory.find()                     | Expected '.' but found '-'. Quote collection names that aren't | 1 | 9
+            db[orders].find()                                | Expected the collection name as a string inside [ ]            | 1 | 3
+            db[5].find()                                     | Expected the collection name as a string inside [ ]            | 1 | 3
+            db['orders'.find()                               | Expected ']' but found '.'                                     | 1 | 12
+            db.getCollection('a')['b'].find()                | Expected '.' but found '['                                     | 1 | 22
             db.orders.find({ name: /unclosed })              | Regular expression is not closed                               | 1 | 24
             """)
     void reportsUnsupportedOrInvalidStatementsWithPositions(String statement, String message, int line, int column)
