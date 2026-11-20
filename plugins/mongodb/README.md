@@ -37,7 +37,8 @@ With Queryeer's payloadbuilder engine installed (an optional dependency, `querye
 
 - **Backend:** `PayloadbuilderMongoCatalog`, started by `DependencyExtension.whenDependencyActive`, registers `PayloadbuilderMongoCatalogProvider`, which hands payloadbuilder's `MongoCatalog` (bundled, `payloadbuilder-catalog-mongodb`) a connection string and credentials from the plugin's settings. Only these two classes refer to payloadbuilder types, so the plugin loads and works without payloadbuilder. The catalog uses this plugin's MongoDB driver; a container test runs a payloadbuilder query through it against every supported server version.
 - **Frontend:** `payloadbuilderCatalog.tsx`, registered when `context.isDependencyActive("core.queryengine.payloadbuilder")`.
-- **Limits:** no table/column completion yet (API-GAPS B5, core 0.22), and connections that allow invalid TLS certificates are refused (API-GAPS P1, payloadbuilder 1.16).
+- **TLS:** a connection that allows invalid certificates is honoured as by the plugin's own client, through the catalog property `tlsAllowInvalidCertificates` (payloadbuilder 1.16, bundled with the catalog).
+- **Limits:** no table/column completion yet (API-GAPS B5, core 0.22).
 
 ## Decisions
 
