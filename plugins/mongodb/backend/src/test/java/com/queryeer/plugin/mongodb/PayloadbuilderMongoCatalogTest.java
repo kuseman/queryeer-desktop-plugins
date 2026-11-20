@@ -72,6 +72,29 @@ class PayloadbuilderMongoCatalogTest
     }
 
     @Test
+    void aFailingCatalogExtensionIsLoggedAndTheEngineStillWorks() throws Exception
+    {
+        // E.g. a payloadbuilder whose API no longer matches the bundled catalog (NoClassDefFoundError), or a registry that refuses the contributor
+        for (Throwable failure : List.of(new NoClassDefFoundError("se/kuseman/payloadbuilder/api/catalog/Catalog"), new IllegalStateException("registry refused")))
+        {
+            List<String> errors = new ArrayList<>();
+            List<String> registrations = new ArrayList<>();
+            MongoBackendPlugin plugin = new MongoBackendPlugin();
+
+            plugin.activate(context(true, contributor -> sneakyThrow(failure), errors, registrations), descriptor());
+
+            assertTrue(registrations.contains("queryEngines.register"), failure + ": " + registrations);
+            assertEquals(1, errors.size(), failure + ": " + errors);
+            assertTrue(errors.get(0)
+                    .contains("payloadbuilder's mongodb catalog isn't available")
+                    && errors.get(0)
+                            .contains(failure.getMessage()),
+                    errors.get(0));
+            plugin.deactivate();
+        }
+    }
+
+    @Test
     void injectsTheConnectionFromThePluginsSettings()
     {
         MongoClientCache clients = new MongoClientCache(config(Map.of("connectionId", "c1", "title", "Local", "hosts", "db1:27017,db2:27017", "tls", true, "username", "app", "password",
@@ -190,6 +213,13 @@ class PayloadbuilderMongoCatalogTest
     private static BackendPluginContext context(boolean payloadbuilderActive, java.util.function.Consumer<PayloadbuilderCatalogProviderContributor> registry,
             List<String> errors)
     {
+        return context(payloadbuilderActive, registry, errors, new ArrayList<>());
+    }
+
+    /** As above, recording calls on the other context services as {@code "<context method>.<method>"}, e.g. {@code queryEngines.register}. */
+    private static BackendPluginContext context(boolean payloadbuilderActive, java.util.function.Consumer<PayloadbuilderCatalogProviderContributor> registry,
+            List<String> errors, List<String> registrations)
+    {
         ConfigService config = config();
         LoggerService logger = logger(errors);
         PluginServiceRegistry services = proxy(PluginServiceRegistry.class, (proxy, method, args) ->
@@ -215,9 +245,19 @@ class PayloadbuilderMongoCatalogTest
             case "services" -> services;
             // queryEngines, fileSessions, changelogs, ...: registrations go nowhere
             default -> method.getReturnType()
-                    .isInterface() ? proxy(method.getReturnType(), (p, m, a) -> null)
+                    .isInterface() ? proxy(method.getReturnType(), (p, m, a) ->
+                    {
+                        registrations.add(method.getName() + "." + m.getName());
+                        return null;
+                    })
                             : null;
         });
+    }
+
+    @SuppressWarnings("unchecked")
+    private static <E extends Throwable> void sneakyThrow(Throwable e) throws E
+    {
+        throw (E) e;
     }
 
     private static PluginDescriptor descriptor()
