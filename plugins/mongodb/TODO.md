@@ -94,7 +94,7 @@ Through the public `tableOutputContextMenu`.
 
 ## 5. Shell syntax
 
-- [x] `ShellParser`: mongosh statements (`db.<collection>.find(...).sort(...).limit(...)`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `count`, `distinct`, `getIndexes`, `stats`, `explain`, `getCollection`, `getSiblingDB`, `runCommand`, `adminCommand`, ...) translated to the same command documents as the JSON form; see the README's Query Language. Mixed freely with JSON documents in one file: each statement is recognised by how it starts (`{` / `[` or `db.`).
+- [x] `ShellParser`: mongosh statements (`db.<collection>.find(...).sort(...).limit(...)`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `count`, `distinct`, `getIndexes`, `stats`, `explain`, `getCollection`, `getSiblingDB`, `runCommand`, `adminCommand`, ...) translated to the same command documents as the JSON form; see the README's Query Language. Mixed freely with JSON documents in one file: each statement is recognised by how it starts (`{` / `[`, or `db.` / `db[`).
   - Values go through the Java driver's JSON reader (unquoted keys, single quotes, trailing commas, shell helpers); `new Date("...")` is rewritten to `ISODate`
   - Comments now work anywhere outside strings, also inside documents (before, a `/* */` inside a document was silently read as a regular expression)
   - Not JavaScript: variables, functions and cursor iteration are rejected with a message saying so; writes are rejected by name

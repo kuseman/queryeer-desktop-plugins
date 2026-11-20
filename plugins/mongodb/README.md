@@ -165,7 +165,7 @@ A `.mongo` file holds statements in two forms, which can be mixed freely. Each s
   | `db.c.distinct(key, filter?, options?)` | `distinct` |
   | `db.c.getIndexes()`, `db.c.stats()` | `listIndexes`, `collStats` |
   | `….explain(verbosity?)` after a call, or `db.c.explain(verbosity?).find(…)` | `explain` |
-  | `db.getCollection("name")`, `db.reports.monthly` (dotted names) | the collection |
+  | `db.getCollection("name")`, `db["name"]` (any name, e.g. with `-` or spaces), `db.reports.monthly` (dotted names) | the collection |
   | `db.getSiblingDB("name")` | the database (like `$db`) |
   | `db.runCommand({…})`, `db.adminCommand({…})` | the document (`admin` for `adminCommand`) |
   | `db.stats()`, `db.getCollectionNames()`, `db.getCollectionInfos(filter?)` | `dbStats`, `listCollections` |

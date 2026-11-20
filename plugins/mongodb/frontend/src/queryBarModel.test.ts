@@ -302,6 +302,9 @@ describe("guessCollection", () => {
     expect(guessCollection('{ "count": "orders" }\ndb.customers.find()')).toBe("orders");
     expect(guessCollection("db.runCommand({ ping: 1 })")).toBe("");
     expect(guessCollection("db.getSiblingDB('x').orders.find()")).toBe("");
+    expect(guessCollection("db['proto-pricehistory'].countDocuments({})")).toBe("proto-pricehistory");
+    expect(guessCollection('db.customers.find()\ndb [ "price history" ].find()')).toBe("customers");
+    expect(guessCollection("db.getSiblingDB('x')['orders'].find()")).toBe("");
   });
 });
 

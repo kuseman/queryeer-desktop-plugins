@@ -55,13 +55,14 @@ final class ShellParser
             "createIndexes", "dropIndex", "dropIndexes", "renameCollection", "createCollection", "createView");
     private static final Set<String> DATABASE_WRITES = Set.of("dropDatabase", "createCollection", "createView", "createUser", "dropUser", "dropAllUsers", "createRole",
             "dropRole", "grantRolesToUser", "revokeRolesFromUser", "setProfilingLevel", "shutdownServer", "killOp", "fsyncLock");
-    private static final String NOT_JAVASCRIPT = "Queries are not run as JavaScript, so variables, functions and cursor iteration are not available";
+    private static final String QUOTE_COLLECTION_HINT = "Quote collection names that aren't plain names, e.g. db[\"my-collection\"].find() or db.getCollection(\"my-collection\").find()";
+    private static final String NOT_JAVASCRIPT ="Queries are not run as JavaScript, so variables, functions and cursor iteration are not available";
 
     private String source;
     private LineIndex lines;
     private int pos;
 
-    /** Whether a shell statement starts at {@code i}: {@code db} followed by {@code .}. */
+    /** Whether a shell statement starts at {@code i}: {@code db} followed by {@code .} or {@code [}. */
     static boolean startsStatement(String source, int i)
     {
         if (!source.startsWith("db", i)
@@ -78,7 +79,8 @@ final class ShellParser
             j++;
         }
         return j < source.length()
-                && source.charAt(j) == '.';
+                && (source.charAt(j) == '.'
+                        || source.charAt(j) == '[');
     }
 
     Statement parse(String text, int start, LineIndex index)
@@ -95,8 +97,32 @@ final class ShellParser
         Call first;
         while (true)
         {
+            int separatorAt = skipSpace();
+            if (peek() == '['
+                    && collection == null)
+            {
+                // db["proto-pricehistory"], db.getSiblingDB("shop")["orders"], db.reports["monthly"]
+                pos++;
+                path.add(quotedName(separatorAt));
+                expect(']');
+                continue;
+            }
+            if (collection == null
+                    && !path.isEmpty()
+                    && pos < source.length()
+                    && peek() != '.'
+                    && peek() != ';')
+            {
+                // db.proto-pricehistory.find(): the name stopped at a character a plain name can't have
+                throw error("Expected '.' but found '" + peek() + "'. " + QUOTE_COLLECTION_HINT, separatorAt);
+            }
             expect('.');
             int nameAt = skipSpace();
+            if (peek() == '"'
+                    || peek() == '\'')
+            {
+                throw error("A quoted name can't follow a dot. " + QUOTE_COLLECTION_HINT, nameAt);
+            }
             String name = identifier();
             skipSpace();
             if (peek() != '(')
@@ -654,6 +680,29 @@ final class ShellParser
                     : " at the end"), pos);
         }
         return source.substring(start, pos);
+    }
+
+    /** The string literal at {@code pos} ({@code "name"} or {@code 'name'}, with escapes), for {@code db["name"]}; {@code bracketAt} is the '['. */
+    private String quotedName(int bracketAt)
+    {
+        int start = skipSpace();
+        if (peek() != '"'
+                && peek() != '\'')
+        {
+            throw error("Expected the collection name as a string inside [ ], e.g. db[\"my-collection\"]", bracketAt);
+        }
+        int end = SourceScanner.skipString(source, start, lines);
+        BsonValue value = arguments(source.substring(start, end), "db[", bracketAt).get(0);
+        pos = end;
+        if (!value.isString()
+                || value.asString()
+                        .getValue()
+                        .isBlank())
+        {
+            throw error("Expected the collection name as a string inside [ ], e.g. db[\"my-collection\"]", bracketAt);
+        }
+        return value.asString()
+                .getValue();
     }
 
     private char peek()

@@ -61,6 +61,7 @@ class ShellParserMongoshTest
             "db.orders.find({ status: 'paid' }).explain('executionStats')",
             "db.orders.explain('queryPlanner').aggregate([{ $match: {} }])",
             "db.getCollection('orders').find({ total: 10 })",
+            "db['orders'].find({ total: 20 })",
             "db.runCommand({ count: 'orders', query: { status: 'new' } })");
 
     private static GenericContainer<?> mongo;
