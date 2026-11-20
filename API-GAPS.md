@@ -57,6 +57,8 @@ Priority:
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
+| B5 Plugin catalogs get no SQL editor services | P2 | Open, planned for core 0.22 (decided 2026-11-20). MongoDB's `mongodb` catalog ships without table/column completion until then |
+| P1 Payloadbuilder's Mongo catalog can't trust invalid certificates | P3 | Open, planned for payloadbuilder 1.16 (decided 2026-11-20). MongoDB's catalog refuses such a connection with a message |
 | B4 Runner working directory | P3 | ✅ Fixed in core: `queryeer.builtins.dir` / `QUERYEER_BUILTINS_DIR`. MongoDB's smoke test uses it. |
 | D1 Developer plugin folders | P1 | ✅ Fixed in core (working tree, 2026-11-19): `QUERYEER_DEV_PLUGINS`, `DEVELOPMENT-PLUGIN.md` §8.4 |
 | D2 Public backend restart | P1 | ✅ Fixed in core (working tree, 2026-11-19): command `core.backend.restartAndReload` (Restart Backend and Reload), which reloads the window after the restart |
@@ -380,6 +382,16 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Behaviour:** `BackendRunnerApp` finds builtin plugins relative to the working directory (`./plugins/builtin`), so a standalone run (tests, tools) has to use the core repo as `cwd`.
 - **Workaround here:** `plugins/mongodb/scripts/smoke-backend.mjs` does that.
 - **Suggestion:** a `-Dqueryeer.builtins.dir` system property, or resolve relative to the runner jar.
+
+### B5 (P2): Plugin catalogs get no SQL editor services
+- **Behaviour:** Queryeer's built-in payloadbuilder catalogs offer table and column completion and hover through `PayloadbuilderSystemTableSqlEditorServices`, which reads a catalog's system tables (`sys#tables`, `sys#columns`). The class is internal to `queryengine.payloadbuilder` and not exported, so a plugin's catalog can only return `PayloadbuilderCatalogSqlEditorServices.NONE`.
+- **Impact:** MongoDB's `mongodb` catalog, which replaces the built-in one, has no completion in payloadbuilder files, which the built-in had.
+- **Suggestion (core 0.22):** expose the generic implementation through the exported API, e.g. a `systemTableEditorServices()` on `PayloadbuilderCatalogProviderRegistry`, and use it in `PayloadbuilderMongoCatalogProvider.editorServices()`.
+
+### P1 (P3): Payloadbuilder's Mongo catalog can't trust invalid certificates
+- **Behaviour:** payloadbuilder's `MongoCatalog` builds its own client from a connection string. Trusting invalid TLS certificates needs an `SSLContext` in the Java driver, which a connection string can't express, so a MongoDB connection with "Allow invalid certificates" can't serve the catalog.
+- **Workaround here:** none; `PayloadbuilderMongoCatalogProvider` refuses such a connection with a message saying so.
+- **Suggestion (payloadbuilder 1.16):** a catalog property (e.g. `tlsAllowInvalidCertificates`) that `MongoClientHolder` turns into a trust-all `SSLContext`, part of the client cache key; the plugin then passes it.
 
 ## Developer experience
 

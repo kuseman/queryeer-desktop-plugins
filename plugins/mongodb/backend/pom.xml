@@ -34,8 +34,44 @@
             <artifactId>mongodb-driver-sync</artifactId>
             <version>${mongodb.driver.version}</version>
         </dependency>
+        <!--
+            The mongodb payloadbuilder catalog, used only when queryengine.payloadbuilder is there (an optional dependency in
+            plugin.json). Its API (and Queryeer's catalog SPI) comes from that plugin's exports, so it isn't bundled. The plugin
+            owns the driver version: the catalog uses this plugin's mongodb-driver-sync.
+        -->
+        <dependency>
+            <groupId>com.queryeer.backend</groupId>
+            <artifactId>backend-lib-queryengine-payloadbuilder-foundation</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>se.kuseman.payloadbuilder</groupId>
+            <artifactId>payloadbuilder-catalog-mongodb</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>se.kuseman.payloadbuilder</groupId>
+                    <artifactId>payloadbuilder-api</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>org.mongodb</groupId>
+                    <artifactId>mongodb-driver-sync</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
 
         <!-- TEST -->
+        <!-- Runs payloadbuilder queries through the plugin's mongodb catalog against the test containers -->
+        <dependency>
+            <groupId>se.kuseman.payloadbuilder</groupId>
+            <artifactId>payloadbuilder-core</artifactId>
+            <version>${payloadbuilder.version}</version>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.mongodb</groupId>
+                    <artifactId>mongodb-driver-sync</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>

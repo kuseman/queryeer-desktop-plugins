@@ -15,8 +15,9 @@ The first-milestone design is agreed (see [Design](#design)).
 - the connections settings editor, with a **Test connection** button
 - a **MongoDB** sidebar view for MongoDB files, with connection and database pickers, plus a read-only "connection | database" label in the query editor status bar
 - the execution-context provider
+- payloadbuilder's `mongodb` catalog over the plugin's connections, when payloadbuilder is installed (see [PayloadBuilder catalog](#payloadbuilder-catalog))
 
-It builds against `@queryeer/api` 0.20.0 from npm. The explorer, query bar and later work are tracked in [TODO.md](TODO.md); the changelog is generated from commit subjects (see [Building](#building)).
+It builds against `@queryeer/api` 0.21.0 from npm and `backend-api` 0.21.0 from Maven Central, and needs Queryeer Desktop 0.21 or later. The explorer, query bar and later work are tracked in [TODO.md](TODO.md); the changelog is generated from commit subjects (see [Building](#building)).
 
 Missing host APIs found along the way are tracked in [API-GAPS.md](../../API-GAPS.md).
 
@@ -30,10 +31,18 @@ The plugin depends on public plugin APIs added to Queryeer Desktop in `@queryeer
 - `context.components.PasswordFieldInput`
 - `jdk.naming.dns` in the packaged runtime
 
+## PayloadBuilder catalog
+
+With Queryeer's payloadbuilder engine installed (an optional dependency, `queryengine.payloadbuilder` / `core.queryengine.payloadbuilder`), the plugin registers the `mongodb` catalog on both sides. It replaces Queryeer's built-in `mongodb` catalog, keeping its id and its `mongo` default alias, so payloadbuilder files keep their catalog; only the connection is picked again, from this plugin's connections.
+
+- **Backend:** `PayloadbuilderMongoCatalog`, started by `DependencyExtension.whenDependencyActive`, registers `PayloadbuilderMongoCatalogProvider`, which hands payloadbuilder's `MongoCatalog` (bundled, `payloadbuilder-catalog-mongodb`) a connection string and credentials from the plugin's settings. Only these two classes refer to payloadbuilder types, so the plugin loads and works without payloadbuilder. The catalog uses this plugin's MongoDB driver; a container test runs a payloadbuilder query through it against every supported server version.
+- **Frontend:** `payloadbuilderCatalog.tsx`, registered when `context.isDependencyActive("core.queryengine.payloadbuilder")`.
+- **Limits:** no table/column completion yet (API-GAPS B5, core 0.22), and connections that allow invalid TLS certificates are refused (API-GAPS P1, payloadbuilder 1.16).
+
 ## Decisions
 
 - MongoDB will be the first separately released native query-engine plugin.
-- This plugin is unrelated to Queryeer's existing PayloadBuilder MongoDB catalog integration.
+- Since 0.3.0 the plugin also serves payloadbuilder's `mongodb` catalog, replacing Queryeer's built-in one (decided 2026-11-20; plan in [`specs/engine-catalogs.md`](../../specs/engine-catalogs.md)). Connections are not migrated from Queryeer's own MongoDB connections (`core.queryengine.payloadbuilder.mongodb`).
 - The plugin lives outside the Queryeer Desktop core repository. It lives in the shared `queryeer-desktop-plugins` repository for verified plugins, owned by the Queryeer Desktop owner, at `plugins/mongodb/`. It was moved here from the retired standalone `queryeer-desktop-mongodb` repository before that repository had any commits.
 - Each plugin in the shared repository is versioned and released independently, so users never need to add several repositories.
 - A plugin is "verified" when it is listed in the shared catalog, not because of where its code is hosted. Third-party plugins can be listed while staying in their own repositories.
