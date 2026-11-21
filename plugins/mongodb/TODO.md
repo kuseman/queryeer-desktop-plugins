@@ -157,7 +157,7 @@ A dashboard tab opened from a connection in the explorer: operations per second,
 - [ ] Once core has it: a backend `serverStatusSample` invoke action (`serverStatus`, `replSetGetStatus` on a replica set, `currentOp` for the table), and an explorer "Overview" action that opens the dashboard
 - [ ] Maybe before then: a one-off "Server status" in the explorer that runs `serverStatus` into the grid
 
-## 10. PayloadBuilder catalog (0.3.0, needs Queryeer 0.21)
+## 10. PayloadBuilder catalog (0.3.0, needs Queryeer 0.22)
 
 The plugin serves payloadbuilder's `mongodb` catalog from its own connections, replacing Queryeer's built-in one. Plan: [`specs/engine-catalogs.md`](../../specs/engine-catalogs.md) §3.5; how it works: the README's [PayloadBuilder catalog](README.md#payloadbuilder-catalog).
 
@@ -167,10 +167,10 @@ The plugin serves payloadbuilder's `mongodb` catalog from its own connections, r
 - [x] Verified in Queryeer (2026-11-20), also with payloadbuilder's backend removed: the MongoDB engine keeps working
 - [x] Connections that allow invalid TLS certificates: payloadbuilder 1.16's `tlsAllowInvalidCertificates` (API-GAPS.md P1)
 - [x] No migration of the built-in catalog's connections (decided 2026-11-20): files keep their alias and pick a connection again
-- [ ] Release 0.3.0. Release notes: replaces the built-in `mongodb` catalog, pick the connection again in existing files, no table/column completion yet
+- [ ] Release 0.3.0 together with Queryeer 0.22, requiring it (decided 2026-11-21: on 0.21 it would take over the catalog without the table/column completion the built-in one has). Release notes: replaces the built-in `mongodb` catalog, pick the connection again in existing files
 - [x] Report a connection the query picked (`use mongo.connectionId`, or a connection string matching one connection) back to the catalog panel: `buildCatalogPatch` (2026-11-21)
 - [ ] Needs Queryeer 0.22: table and column completion, `editorServices()` returning `PayloadbuilderCatalogSqlEditorServices.systemTables()` (API-GAPS.md B5, fixed in core for 0.22). Also Mongo shell completion, hover and diagnostics through `editorLanguages` (F5)
-- [ ] Core 0.22: `whenDependencyActive` catches and logs failures itself. Drop the plugin's own try/catch once its minimum Queryeer version is 0.22.
+- [ ] Core 0.22: `whenDependencyActive` catches and logs failures itself. Drop the plugin's own try/catch (0.3.0 requires 0.22).
 - [ ] A later core release (after the GitHub plugin source) removes the built-in Mongo catalog and its connection settings; its release notes point to this plugin
 
 ## Out of scope for now
