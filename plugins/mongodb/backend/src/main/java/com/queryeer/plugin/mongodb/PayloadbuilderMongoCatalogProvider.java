@@ -2,12 +2,15 @@ package com.queryeer.plugin.mongodb;
 
 import static com.queryeer.backend.api.PayloadUtils.stringValue;
 
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogProviderContributor;
 
 import se.kuseman.payloadbuilder.api.catalog.Catalog;
 import se.kuseman.payloadbuilder.api.execution.IQuerySession;
+import se.kuseman.payloadbuilder.api.execution.ValueVector;
 import se.kuseman.payloadbuilder.catalog.mongodb.MongoCatalog;
 
 /**
@@ -85,6 +88,45 @@ final class PayloadbuilderMongoCatalogProvider implements PayloadbuilderCatalogP
     public void clearProperties(IQuerySession session, String alias, Map<String, Object> inputProperties)
     {
         clearCatalogProperties(session, alias);
+    }
+
+    /**
+     * What a run changed that the file's catalog panel should show: a {@code connectionId} the query set itself ({@code use mongo.connectionId = 'other'}), or a connection string it set that is
+     * exactly one enabled connection's. Any other connection string is left as an override for that run; the next run connects with the picked connection again.
+     */
+    @Override
+    public Map<String, Object> buildCatalogPatch(IQuerySession session, String alias, Map<String, Object> inputProperties)
+    {
+        Map<String, Object> changed = new LinkedHashMap<>(PayloadbuilderCatalogProviderContributor.compareInputProperties(session, alias, inputProperties));
+        if (changed.containsKey(KEY_CONNECTION_ID))
+        {
+            return changed;
+        }
+        ValueVector value = session.getCatalogProperty(alias, MongoCatalog.CONNECTIONSTRING_KEY);
+        String connectionString = value == null
+                || value.size() == 0
+                || value.isNull(0) ? null
+                        : value.valueAsString(0);
+        String connectionId = stringValue(inputProperties, KEY_CONNECTION_ID);
+        if (connectionString == null
+                || connectionId == null)
+        {
+            return changed;
+        }
+        List<MongoConnectionSettings> matches = clients.allSettings()
+                .stream()
+                .filter(MongoConnectionSettings::enabled)
+                .filter(connection -> connectionString.equals(catalogConnectionString(connection)))
+                .toList();
+        if (matches.size() == 1
+                && matches.stream()
+                        .noneMatch(connection -> connection.connectionId()
+                                .equals(connectionId)))
+        {
+            changed.put(KEY_CONNECTION_ID, matches.get(0)
+                    .connectionId());
+        }
+        return changed;
     }
 
     /** The connection string payloadbuilder's catalog connects with: hosts and options as the plugin's own client uses them, plus TLS, which the plugin's client sets in code. */
