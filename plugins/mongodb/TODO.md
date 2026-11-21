@@ -168,9 +168,10 @@ The plugin serves payloadbuilder's `mongodb` catalog from its own connections, r
 - [x] Connections that allow invalid TLS certificates: payloadbuilder 1.16's `tlsAllowInvalidCertificates` (API-GAPS.md P1)
 - [x] No migration of the built-in catalog's connections (decided 2026-11-20): files keep their alias and pick a connection again
 - [ ] Release 0.3.0. Release notes: replaces the built-in `mongodb` catalog, pick the connection again in existing files, no table/column completion yet
-- [ ] Blocked on core 0.22: table and column completion (API-GAPS.md B5)
+- [x] Report a connection the query picked (`use mongo.connectionId`, or a connection string matching one connection) back to the catalog panel: `buildCatalogPatch` (2026-11-21)
+- [ ] Needs Queryeer 0.22: table and column completion, `editorServices()` returning `PayloadbuilderCatalogSqlEditorServices.systemTables()` (API-GAPS.md B5, fixed in core for 0.22). Also Mongo shell completion, hover and diagnostics through `editorLanguages` (F5)
 - [ ] Core 0.22: `whenDependencyActive` catches and logs failures itself. Drop the plugin's own try/catch once its minimum Queryeer version is 0.22.
-- [ ] Core 0.22 removes the built-in Mongo catalog and its connection settings; its release notes point to this plugin
+- [ ] A later core release (after the GitHub plugin source) removes the built-in Mongo catalog and its connection settings; its release notes point to this plugin
 
 ## Out of scope for now
 
