@@ -6,6 +6,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -75,14 +76,20 @@ final class MongoClientCache implements AutoCloseable
         return new Handle(entry.settings(), entry.client());
     }
 
-    MongoConnectionSettings findSettings(String connectionId)
+    /** Every connection in the settings, enabled or not. */
+    List<MongoConnectionSettings> allSettings()
     {
         SettingsModule module = config.getModule(MongoConnectionSettings.MODULE_ID);
         Object raw = module == null
                 || module.values() == null ? null
                         : module.values()
                                 .get(MongoConnectionSettings.CONNECTIONS_SETTING_ID);
-        for (MongoConnectionSettings settings : MongoConnectionSettings.parseList(raw))
+        return MongoConnectionSettings.parseList(raw);
+    }
+
+    MongoConnectionSettings findSettings(String connectionId)
+    {
+        for (MongoConnectionSettings settings : allSettings())
         {
             if (settings.connectionId()
                     .equals(connectionId))
@@ -120,7 +127,7 @@ final class MongoClientCache implements AutoCloseable
         clients.clear();
     }
 
-    private String resolvePassword(MongoConnectionSettings settings)
+    String resolvePassword(MongoConnectionSettings settings)
     {
         if (settings.username() == null)
         {

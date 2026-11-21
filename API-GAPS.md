@@ -31,7 +31,7 @@ Priority:
 | F2 Form primitives and styles | P1 | ✅ Fixed in core: stable theme variables documented in `DEVELOPMENT-PLUGIN.md`. MongoDB's CSS uses them. |
 | F3 Open Settings at a setting | P2 | ✅ Fixed in core: `settings.open(settingId?)`. MongoDB's ⚙ action and empty state use it. |
 | F4 One call to register a file type | P2 | Open |
-| F5 Monaco language features | P2 | Partly fixed in core (`0b1819f`): `editorLanguages.registerLanguage({ id, aliases, monarch, configuration })`, a plugin-defined language without validation. Completion, hover and diagnostics are still open (needs design). |
+| F5 Monaco language features | P2 | Partly fixed in core (`0b1819f`): `editorLanguages.registerLanguage({ id, aliases, monarch, configuration })`, a plugin-defined language without validation. Completion, hover, parameter hints and diagnostics fixed for 0.22 on core's `feature/api-0.22.0` (`0eb51d4e`): `editorLanguages.registerCompletionProvider`, `registerHoverProvider`, `registerSignatureHelpProvider`, `registerDiagnosticsProvider`. JSON schemas still open. |
 | F6 Inconsistent `Disposable` returns | P2 | ✅ Fixed in core (working tree, 2026-11-18): every `register*`, `subscribe` and `on*` returns a `Disposable`. Breaking: MongoDB moved to it with 0.20.0 |
 | F7 Late settings registration | P2 | ✅ Fixed in core: `registerSettings` refreshes by itself. |
 | F8 ID helpers | P3 | Open |
@@ -57,6 +57,8 @@ Priority:
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
+| B5 Plugin catalogs get no SQL editor services | P2 | Fixed in core for 0.22 (`249cc94c` on `feature/api-0.22.0`): `PayloadbuilderCatalogSqlEditorServices.systemTables()`. MongoDB's `mongodb` catalog ships without table/column completion until a release that needs 0.22 |
+| P1 Payloadbuilder's Mongo catalog can't trust invalid certificates | P3 | ✅ Fixed in payloadbuilder 1.16.0: catalog property `tlsAllowInvalidCertificates`, which MongoDB's catalog sets (2026-11-20) |
 | B4 Runner working directory | P3 | ✅ Fixed in core: `queryeer.builtins.dir` / `QUERYEER_BUILTINS_DIR`. MongoDB's smoke test uses it. |
 | D1 Developer plugin folders | P1 | ✅ Fixed in core (working tree, 2026-11-19): `QUERYEER_DEV_PLUGINS`, `DEVELOPMENT-PLUGIN.md` §8.4 |
 | D2 Public backend restart | P1 | ✅ Fixed in core (working tree, 2026-11-19): command `core.backend.restartAndReload` (Restart Backend and Reload), which reloads the window after the restart |
@@ -104,6 +106,7 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Today:** `editorLanguages.registerMimeType(mime, "json")` maps a file type to an existing Monaco language.
 - **Missing:** a plugin cannot register a JSON schema, completion, hover or diagnostics for its language. Completion and hover are wired to `sql` only (`core.queryengine/sql-completion-language.ts`, `sql-hover-language.ts`).
 - **Suggestion:** a language-features contribution backed by `queryEngines.invoke` actions, generalising the `sql.complete` / `sql.hover` / `sql.symbolAtPosition` actions to any engine and language.
+- **Fixed in core (2026-11-21, for 0.22):** `editorLanguages.registerCompletionProvider(languageId, provider)`, `registerHoverProvider`, `registerSignatureHelpProvider` and `registerDiagnosticsProvider` (asked after a pause in typing), with the existing provider types of `@queryeer/api/editor/EditorApi`. The `document` a provider gets carries the open file's `fileId`, so the provider asks its own backend with `queryEngines.invoke`; core adds no backend action. Documented in `DEVELOPMENT-PLUGIN.md` §7.2.1 and §7.2.2.
 
 - **Minimal slice, needed first:** MongoDB's shell syntax (`db.orders.find({...}).sort({...})`, TODO item 5) cannot live in a `json`-mapped editor: Monaco's JSON validation marks it as an error. Mapping to `javascript` doesn't work either, because a JSON command document at the start of a line parses as a block statement and is flagged too. A plugin needs to register its own language before any completion work:
   ```ts
@@ -380,6 +383,17 @@ Not a gap: engine-specific panels. They already work through `layout.registerVie
 - **Behaviour:** `BackendRunnerApp` finds builtin plugins relative to the working directory (`./plugins/builtin`), so a standalone run (tests, tools) has to use the core repo as `cwd`.
 - **Workaround here:** `plugins/mongodb/scripts/smoke-backend.mjs` does that.
 - **Suggestion:** a `-Dqueryeer.builtins.dir` system property, or resolve relative to the runner jar.
+
+### B5 (P2): Plugin catalogs get no SQL editor services
+- **Behaviour:** Queryeer's built-in payloadbuilder catalogs offer table and column completion and hover through `PayloadbuilderSystemTableSqlEditorServices`, which reads a catalog's system tables (`sys#tables`, `sys#columns`). The class is internal to `queryengine.payloadbuilder` and not exported, so a plugin's catalog can only return `PayloadbuilderCatalogSqlEditorServices.NONE`.
+- **Impact:** MongoDB's `mongodb` catalog, which replaces the built-in one, has no completion in payloadbuilder files, which the built-in had.
+- **Suggestion (core 0.22):** expose the generic implementation through the exported API, e.g. a `systemTableEditorServices()` on `PayloadbuilderCatalogProviderRegistry`, and use it in `PayloadbuilderMongoCatalogProvider.editorServices()`.
+- **Fixed in core (2026-11-21, for 0.22, `249cc94c`):** the class moved into the exported foundation package, package-private, reached through the static `PayloadbuilderCatalogSqlEditorServices.systemTables()`; the built-in catalogs use it too. The plugin returns it from `editorServices()` once it needs Queryeer 0.22: the method runs while editing, not at activation, so on 0.21 the class would be missing then.
+- **Also in 0.22:** `buildCatalogPatch` reports changed input properties by default (it reported nothing, which is why the plugin overrides it), and `DependencyExtension.whenDependencyActive` logs failures instead of throwing them.
+
+### P1 (P3): Payloadbuilder's Mongo catalog can't trust invalid certificates
+- **Behaviour:** payloadbuilder's `MongoCatalog` builds its own client from a connection string. Trusting invalid TLS certificates needs an `SSLContext` in the Java driver, which a connection string can't express, so a MongoDB connection with "Allow invalid certificates" can't serve the catalog.
+- **Fixed (payloadbuilder 1.16.0):** catalog property `MongoCatalog.TLS_ALLOW_INVALID_CERTIFICATES_KEY`, which `MongoClientHolder` turns into a trust-all `SSLContext` (part of the client cache key, never turning TLS on by itself). `PayloadbuilderMongoCatalogProvider` sets it for a TLS connection that allows invalid certificates, as the plugin's own client does. The plugin bundles the 1.16 catalog; its `payloadbuilder-api` comes from Queryeer and changed only in javadoc since 1.15, so Queryeer 0.21 (which ships 1.15) is fine.
 
 ## Developer experience
 

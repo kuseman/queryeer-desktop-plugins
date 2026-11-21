@@ -25,7 +25,9 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
         <!-- Queryeer host contracts (provided by the host at runtime) -->
-        <queryeer.backend.version>0.20.0</queryeer.backend.version>
+        <queryeer.backend.version>0.21.0</queryeer.backend.version>
+        <!-- The payloadbuilder catalogs a plugin bundles (com.queryeer.mongodb's mongodb catalog) -->
+        <payloadbuilder.version>1.16.0</payloadbuilder.version>
 
         <junit.version>5.12.0</junit.version>
         <testcontainers.version>2.0.5</testcontainers.version>
@@ -44,6 +46,18 @@
                 <artifactId>backend-contract</artifactId>
                 <version>${queryeer.backend.version}</version>
                 <scope>provided</scope>
+            </dependency>
+            <!-- Exported by queryengine.payloadbuilder, with se.kuseman.payloadbuilder.api: never bundled -->
+            <dependency>
+                <groupId>com.queryeer.backend</groupId>
+                <artifactId>backend-lib-queryengine-payloadbuilder-foundation</artifactId>
+                <version>${queryeer.backend.version}</version>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>se.kuseman.payloadbuilder</groupId>
+                <artifactId>payloadbuilder-catalog-mongodb</artifactId>
+                <version>${payloadbuilder.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.junit</groupId>

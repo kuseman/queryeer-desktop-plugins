@@ -100,15 +100,23 @@ function describeJson(statement: string): string {
 }
 
 function startsShellStatement(text: string, i: number): boolean {
-  return text.startsWith("db", i) && (i === 0 || !/[\w$]/.test(text[i - 1])) && /^db[ \t]*\./.test(text.slice(i, i + 32));
+  return text.startsWith("db", i) && (i === 0 || !/[\w$]/.test(text[i - 1])) && /^db[ \t]*[.[]/.test(text.slice(i, i + 32));
 }
 
-/** The end of a `db.….…(…)` chain: after its last name or call, where no further `.` follows (new lines and comments may come before it). */
+/**
+ * The end of a `db.….…(…)` chain: after its last name, `["name"]` or call, where no further `.` or `[` follows (new lines and comments may
+ * come before it).
+ */
 function shellStatementEnd(text: string, start: number): number {
   let pos = start + 2;
   let end = pos;
   while (pos < text.length) {
     const next = skipBlanks(text, pos);
+    if (text[next] === "[") {
+      pos = closingBracket(text, next);
+      end = pos;
+      continue;
+    }
     if (text[next] !== ".") {
       return end;
     }

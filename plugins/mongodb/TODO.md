@@ -94,7 +94,7 @@ Through the public `tableOutputContextMenu`.
 
 ## 5. Shell syntax
 
-- [x] `ShellParser`: mongosh statements (`db.<collection>.find(...).sort(...).limit(...)`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `count`, `distinct`, `getIndexes`, `stats`, `explain`, `getCollection`, `getSiblingDB`, `runCommand`, `adminCommand`, ...) translated to the same command documents as the JSON form; see the README's Query Language. Mixed freely with JSON documents in one file: each statement is recognised by how it starts (`{` / `[` or `db.`).
+- [x] `ShellParser`: mongosh statements (`db.<collection>.find(...).sort(...).limit(...)`, `findOne`, `aggregate`, `countDocuments`, `estimatedDocumentCount`, `count`, `distinct`, `getIndexes`, `stats`, `explain`, `getCollection`, `getSiblingDB`, `runCommand`, `adminCommand`, ...) translated to the same command documents as the JSON form; see the README's Query Language. Mixed freely with JSON documents in one file: each statement is recognised by how it starts (`{` / `[`, or `db.` / `db[`).
   - Values go through the Java driver's JSON reader (unquoted keys, single quotes, trailing commas, shell helpers); `new Date("...")` is rewritten to `ISODate`
   - Comments now work anywhere outside strings, also inside documents (before, a `/* */` inside a document was silently read as a regular expression)
   - Not JavaScript: variables, functions and cursor iteration are rejected with a message saying so; writes are rejected by name
@@ -124,7 +124,7 @@ Through the public `tableOutputContextMenu`.
 - [ ] Command and stage names, operators, and field names from the schema sample
 - [ ] Blocked on core: API-GAPS.md F5 (language features for plugin languages)
 
-## 8. Releasing (when ready for the first release)
+## 8. Releasing (done: 0.1.0, then 0.2.0 on 2026-11-19)
 
 Core's two-step pattern (`create-release.yml` + `release.yml`), per plugin and without snapshots. Shared by every plugin in the repository.
 
@@ -140,12 +140,13 @@ Core's two-step pattern (`create-release.yml` + `release.yml`), per plugin and w
   - Fails when the tag's version differs from `plugin.json`, and refuses to publish a tag twice (an existing GitHub Release for the tag)
   - GitHub Release for the tag with `<id>-<version>.zip` and `.zip.sha256`, release notes from that version's changelog section (the generator needs an option to print one section), `make_latest: false` (GitHub keeps one "latest" per repository; clients read the catalog)
   - `workflow_dispatch` with `dry_run` that builds and checks without publishing, like core
-- [ ] Before the first release
+- [x] Before the first release
   - [x] `mongodb:verify` no longer hard-codes `0.1.0`: `verify-package.mjs` takes the plugin folder and reads the ZIP name from `plugin.json`. Generic `test` / `package` / `verify <plugin>` scripts can wait for a second plugin; the release workflow runs `<plugin>:test` and `<plugin>:package`.
-  - [ ] Repository secret `RELEASE_TOKEN`: a token that may push to the protected `master` and push tags (contents: write). Its tag push is what starts `release-plugin.yml`.
-  - [ ] Merge `feature/mongodb` to `master`
-  - [ ] Dry run: Actions → Release Plugin → Run workflow (`mongodb`, dry run), then check the ZIP and release notes in the run's artifacts
-  - [ ] Actions → Create Plugin Release → `mongodb`. The first release uses `plugin.json`'s 0.1.0.
+  - [x] Repository secret `RELEASE_TOKEN`: a token that may push to the protected `master` and push tags (contents: write). Its tag push is what starts `release-plugin.yml`.
+  - [x] Merge `feature/mongodb` to `master`
+  - [x] Dry run: Actions → Release Plugin → Run workflow (`mongodb`, dry run), then check the ZIP and release notes in the run's artifacts
+  - [x] Actions → Create Plugin Release → `mongodb`. The first release used `plugin.json`'s 0.1.0.
+- [ ] Each release: build with `clean`. `copy-dependencies` doesn't empty `target/lib`, so a dependency upgrade otherwise leaves the old jar next to the new one (seen with payloadbuilder 1.15 → 1.16). CI builds from a fresh checkout and isn't affected.
 - [ ] Later: update `catalog/index.json` from the release workflow, once Queryeer reads a catalog (see the root README's Repository and Releases)
 
 ## 9. Live cluster overview (blocked on core)
@@ -155,6 +156,22 @@ A dashboard tab opened from a connection in the explorer: operations per second,
 - [ ] Blocked on core: API-GAPS.md F25 (charts and live dashboards). No plugin-drawn charts meanwhile.
 - [ ] Once core has it: a backend `serverStatusSample` invoke action (`serverStatus`, `replSetGetStatus` on a replica set, `currentOp` for the table), and an explorer "Overview" action that opens the dashboard
 - [ ] Maybe before then: a one-off "Server status" in the explorer that runs `serverStatus` into the grid
+
+## 10. PayloadBuilder catalog (0.3.0, needs Queryeer 0.21)
+
+The plugin serves payloadbuilder's `mongodb` catalog from its own connections, replacing Queryeer's built-in one. Plan: [`specs/engine-catalogs.md`](../../specs/engine-catalogs.md) §3.5; how it works: the README's [PayloadBuilder catalog](README.md#payloadbuilder-catalog).
+
+- [x] Optional dependency on `queryengine.payloadbuilder` / `core.queryengine.payloadbuilder`; the plugin loads and works without it (2026-11-20)
+- [x] Backend: `PayloadbuilderMongoCatalog` through `DependencyExtension.whenDependencyActive`, bundling `payloadbuilder-catalog-mongodb` with the plugin's driver; a container test runs a payloadbuilder query through it
+- [x] Frontend: catalog panel listing the plugin's connections, storing `{ connectionId }`
+- [x] Verified in Queryeer (2026-11-20), also with payloadbuilder's backend removed: the MongoDB engine keeps working
+- [x] Connections that allow invalid TLS certificates: payloadbuilder 1.16's `tlsAllowInvalidCertificates` (API-GAPS.md P1)
+- [x] No migration of the built-in catalog's connections (decided 2026-11-20): files keep their alias and pick a connection again
+- [ ] Release 0.3.0. Release notes: replaces the built-in `mongodb` catalog, pick the connection again in existing files, no table/column completion yet
+- [x] Report a connection the query picked (`use mongo.connectionId`, or a connection string matching one connection) back to the catalog panel: `buildCatalogPatch` (2026-11-21)
+- [ ] Needs Queryeer 0.22: table and column completion, `editorServices()` returning `PayloadbuilderCatalogSqlEditorServices.systemTables()` (API-GAPS.md B5, fixed in core for 0.22). Also Mongo shell completion, hover and diagnostics through `editorLanguages` (F5)
+- [ ] Core 0.22: `whenDependencyActive` catches and logs failures itself. Drop the plugin's own try/catch once its minimum Queryeer version is 0.22.
+- [ ] A later core release (after the GitHub plugin source) removes the built-in Mongo catalog and its connection settings; its release notes point to this plugin
 
 ## Out of scope for now
 

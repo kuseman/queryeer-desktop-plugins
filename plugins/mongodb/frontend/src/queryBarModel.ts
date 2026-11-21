@@ -555,16 +555,18 @@ const SHELL_METHODS = "find|findOne|aggregate|countDocuments|estimatedDocumentCo
 
 /**
  * The collection the first command in `text` reads, or "" when it cannot tell: a JSON command (`"find": "orders"`) or a shell statement
- * (`db.orders.find(`, `db.reports.monthly.find(`, `db.getCollection("orders")`). Prefills the collection when taking over a command the bar
- * did not write, and tells the grid actions where results came from.
+ * (`db.orders.find(`, `db.reports.monthly.find(`, `db.getCollection("orders")`, `db["proto-pricehistory"]`). Prefills the collection when taking
+ * over a command the bar did not write, and tells the grid actions where results came from.
  */
 export function guessCollection(text: string): string {
   const json = /["']?(?:find|aggregate|count|distinct|listIndexes)["']?\s*:\s*["']([^"']+)["']/.exec(text);
   const getCollection = /\bdb\s*\.\s*getCollection\s*\(\s*["']([^"']+)["']\s*\)/.exec(text);
+  const bracket = /\bdb\s*\[\s*["']([^"']+)["']\s*\]/.exec(text);
   const shell = new RegExp(`\\bdb\\s*\\.\\s*((?:[A-Za-z_$][\\w$]*\\s*\\.\\s*)+?)(?:${SHELL_METHODS})\\s*\\(`).exec(text);
   const found = [
     json && { at: json.index, name: json[1] },
     getCollection && { at: getCollection.index, name: getCollection[1] },
+    bracket && { at: bracket.index, name: bracket[1] },
     shell && { at: shell.index, name: shell[1].replace(/\s+/g, "").replace(/\.$/, "") }
   ].filter((candidate): candidate is { at: number; name: string } => Boolean(candidate) && candidate!.name !== "getSiblingDB");
   // The first command in the text wins

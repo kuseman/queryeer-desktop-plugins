@@ -16,7 +16,9 @@ describe("mongoOutline", () => {
       "{ \"dbStats\": 1 }",
       "{ \"explain\": { \"find\": \"orders\" }, \"verbosity\": \"executionStats\" }",
       "db.orders.find().explain('executionStats')",
-      "db.getSiblingDB('other').things.findOne()"
+      "db.getSiblingDB('other').things.findOne()",
+      "db['proto-pricehistory']",
+      "  .countDocuments({ contractVersion: { $lt: 2 } })"
     ].join("\n"))).toEqual([
       "find orders (shell) 2-4",
       "aggregate orders (JSON) 5-5",
@@ -26,7 +28,8 @@ describe("mongoOutline", () => {
       "dbStats (JSON) 8-8",
       "explain find orders (JSON) 9-9",
       "explain find orders (shell) 10-10",
-      "findOne (shell) 11-11"
+      "findOne (shell) 11-11",
+      "countDocuments proto-pricehistory (shell) 12-13"
     ]);
   });
 
