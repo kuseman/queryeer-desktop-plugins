@@ -169,8 +169,10 @@ The plugin serves payloadbuilder's `mongodb` catalog from its own connections, r
 - [x] No migration of the built-in catalog's connections (decided 2026-11-20): files keep their alias and pick a connection again
 - [ ] Release 0.3.0 together with Queryeer 0.22, requiring it (decided 2026-11-21: on 0.21 it would take over the catalog without the table/column completion the built-in one has). Release notes: replaces the built-in `mongodb` catalog, pick the connection again in existing files
 - [x] Report a connection the query picked (`use mongo.connectionId`, or a connection string matching one connection) back to the catalog panel: `buildCatalogPatch` (2026-11-21)
-- [ ] Needs Queryeer 0.22: table and column completion, `editorServices()` returning `PayloadbuilderCatalogSqlEditorServices.systemTables()` (API-GAPS.md B5, fixed in core for 0.22). Also Mongo shell completion, hover and diagnostics through `editorLanguages` (F5)
-- [ ] Core 0.22: `whenDependencyActive` catches and logs failures itself. Drop the plugin's own try/catch (0.3.0 requires 0.22).
+- [x] Table and column completion: `editorServices()` returns `PayloadbuilderCatalogSqlEditorServices.systemTables()` (Queryeer 0.22, API-GAPS.md B5)
+- [ ] Mongo shell completion, hover and diagnostics through `editorLanguages` (Queryeer 0.22, API-GAPS.md F5)
+- [ ] At release: build against the published 0.22.0 (remove `queryeer.backend.version` from `backend/pom.xml`, `paths` and `--tsconfig-raw` from the frontend, devDependency `^0.22.0`)
+- [x] Core 0.22: `whenDependencyActive` catches and logs failures itself; the plugin's own try/catch is gone
 - [ ] A later core release (after the GitHub plugin source) removes the built-in Mongo catalog and its connection settings; its release notes point to this plugin
 
 ## Out of scope for now

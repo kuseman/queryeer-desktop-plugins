@@ -3,6 +3,7 @@ package com.queryeer.plugin.mongodb;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -27,6 +28,7 @@ import com.queryeer.backend.api.PluginServiceRegistry;
 import com.queryeer.backend.api.SettingsModule;
 import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogProviderContributor;
 import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogProviderRegistry;
+import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogSqlEditorServices;
 
 import se.kuseman.payloadbuilder.api.execution.IQuerySession;
 import se.kuseman.payloadbuilder.api.execution.ValueVector;
@@ -74,7 +76,8 @@ class PayloadbuilderMongoCatalogTest
     @Test
     void aFailingCatalogExtensionIsLoggedAndTheEngineStillWorks() throws Exception
     {
-        // E.g. a payloadbuilder whose API no longer matches the bundled catalog (NoClassDefFoundError), or a registry that refuses the contributor
+        // E.g. a payloadbuilder whose API no longer matches the bundled catalog (NoClassDefFoundError), or a registry that refuses the contributor.
+        // Queryeer 0.22 logs it, with the plugin's logger
         for (Throwable failure : List.of(new NoClassDefFoundError("se/kuseman/payloadbuilder/api/catalog/Catalog"), new IllegalStateException("registry refused")))
         {
             List<String> errors = new ArrayList<>();
@@ -86,12 +89,20 @@ class PayloadbuilderMongoCatalogTest
             assertTrue(registrations.contains("queryEngines.register"), failure + ": " + registrations);
             assertEquals(1, errors.size(), failure + ": " + errors);
             assertTrue(errors.get(0)
-                    .contains("payloadbuilder's mongodb catalog isn't available")
+                    .contains("for dependency queryengine.payloadbuilder failed, so the plugin runs without it")
                     && errors.get(0)
                             .contains(failure.getMessage()),
                     errors.get(0));
             plugin.deactivate();
         }
+    }
+
+    @Test
+    void offersCompletionFromTheCatalogsSystemTables()
+    {
+        MongoClientCache clients = new MongoClientCache(config(), logger(new ArrayList<>()));
+
+        assertSame(PayloadbuilderCatalogSqlEditorServices.systemTables(), new PayloadbuilderMongoCatalogProvider(clients).editorServices());
     }
 
     @Test
