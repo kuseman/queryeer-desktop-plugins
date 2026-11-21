@@ -166,6 +166,38 @@ class PayloadbuilderMongoCatalogTest
     }
 
     @Test
+    void reportsTheConnectionAQueryPickedForTheCatalogPanel()
+    {
+        MongoClientCache clients = new MongoClientCache(config(Map.of("connectionId", "c1", "hosts", "one:27017"), Map.of("connectionId", "c2", "hosts", "two:27017", "tls", true),
+                // Same hosts as each other: a connection string can't tell them apart
+                Map.of("connectionId", "a1", "hosts", "shared:27017", "username", "a"), Map.of("connectionId", "a2", "hosts", "shared:27017", "username", "b"),
+                Map.of("connectionId", "off", "hosts", "off:27017", "enabled", false)), logger(new ArrayList<>()));
+        PayloadbuilderMongoCatalogProvider provider = new PayloadbuilderMongoCatalogProvider(clients);
+        Map<String, Object> input = Map.of("connectionId", "c1");
+
+        assertEquals(Map.of(), patchAfter(provider, input, Map.of()));
+        // use mongo.connectionId = 'c2'
+        assertEquals(Map.of("connectionId", "c2"), patchAfter(provider, input, Map.of("connectionId", "c2")));
+        // use mongo.connectionString = '...', the string the catalog gets for c2, with its TLS option
+        assertEquals(Map.of("connectionId", "c2"), patchAfter(provider, input, Map.of(MongoCatalog.CONNECTIONSTRING_KEY, "mongodb://two:27017/?tls=true")));
+        // No connection, two connections, or a disabled one: the panel keeps its connection
+        assertEquals(Map.of(), patchAfter(provider, input, Map.of(MongoCatalog.CONNECTIONSTRING_KEY, "mongodb://elsewhere:27017/")));
+        assertEquals(Map.of(), patchAfter(provider, input, Map.of(MongoCatalog.CONNECTIONSTRING_KEY, "mongodb://shared:27017/")));
+        assertEquals(Map.of(), patchAfter(provider, input, Map.of(MongoCatalog.CONNECTIONSTRING_KEY, "mongodb://off:27017/")));
+    }
+
+    /** A run as payloadbuilder's engine does it: inject, apply the file's input properties, then the query's own {@code use} statements. */
+    private static Map<String, Object> patchAfter(PayloadbuilderMongoCatalogProvider provider, Map<String, Object> input, Map<String, Object> queryChanges)
+    {
+        Map<String, Object> properties = new HashMap<>();
+        IQuerySession session = session(properties);
+        provider.injectProperties(session, "mongo", input);
+        properties.putAll(input);
+        properties.putAll(queryChanges);
+        return provider.buildCatalogPatch(session, "mongo", input);
+    }
+
+    @Test
     void leavesTheCatalogUnconfiguredWithoutAConnection()
     {
         MongoClientCache clients = new MongoClientCache(config(), logger(new ArrayList<>()));
@@ -265,7 +297,7 @@ class PayloadbuilderMongoCatalogTest
         return new PluginDescriptor("com.queryeer.mongodb", "MongoDB", "test", List.of(), List.of(), List.of(), Map.of(), List.of(MongoBackendPlugin.PAYLOADBUILDER_PLUGIN_ID));
     }
 
-    /** Records catalog properties as plain values. */
+    /** Records catalog properties as plain values, and reads them back. */
     private static IQuerySession session(Map<String, Object> properties)
     {
         return proxy(IQuerySession.class, (proxy, method, args) ->
@@ -273,6 +305,13 @@ class PayloadbuilderMongoCatalogTest
             if (method.isDefault())
             {
                 return InvocationHandler.invokeDefault(proxy, method, args);
+            }
+            if (method.getName()
+                    .equals("getCatalogProperty"))
+            {
+                Object value = properties.get((String) args[1]);
+                return value == null ? null
+                        : ValueVector.literalAny(1, value);
             }
             if (method.getName()
                     .equals("setCatalogProperty")
