@@ -41,16 +41,8 @@ public final class MongoBackendPlugin implements BackendPlugin
                 .register(fileConnections);
         context.queryEngines()
                 .register(provider);
-        try
-        {
-            DependencyExtension.whenDependencyActive(context, PAYLOADBUILDER_PLUGIN_ID, PAYLOADBUILDER_CATALOG_EXTENSION, clients);
-        }
-        catch (Exception | LinkageError e)
-        {
-            // The MongoDB engine works without it
-            context.logger()
-                    .error("MongoDB plugin: payloadbuilder's mongodb catalog isn't available from this plugin", e);
-        }
+        // A failing catalog extension is logged, and the MongoDB engine works without it
+        DependencyExtension.whenDependencyActive(context, PAYLOADBUILDER_PLUGIN_ID, PAYLOADBUILDER_CATALOG_EXTENSION, clients);
         String changelog = changelog();
         if (changelog != null)
         {

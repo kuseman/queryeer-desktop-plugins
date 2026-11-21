@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogProviderContributor;
+import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogSqlEditorServices;
 
 import se.kuseman.payloadbuilder.api.catalog.Catalog;
 import se.kuseman.payloadbuilder.api.execution.IQuerySession;
@@ -19,7 +20,8 @@ import se.kuseman.payloadbuilder.catalog.mongodb.MongoCatalog;
  *
  * <p>
  * Payloadbuilder's catalog builds its own client from these properties; a TLS connection that allows invalid certificates also sets {@link MongoCatalog#TLS_ALLOW_INVALID_CERTIFICATES_KEY}
- * (payloadbuilder 1.16). Table and column completion isn't offered, because Queryeer doesn't export the system-table editor services to plugins yet.
+ * (payloadbuilder 1.16). Table and column completion, hover and symbols come from the catalog's system tables ({@link PayloadbuilderCatalogSqlEditorServices#systemTables()},
+ * Queryeer 0.22), as for Queryeer's built-in catalogs.
  * </p>
  */
 final class PayloadbuilderMongoCatalogProvider implements PayloadbuilderCatalogProviderContributor
@@ -45,6 +47,12 @@ final class PayloadbuilderMongoCatalogProvider implements PayloadbuilderCatalogP
     public Catalog createCatalog()
     {
         return catalog;
+    }
+
+    @Override
+    public PayloadbuilderCatalogSqlEditorServices editorServices()
+    {
+        return PayloadbuilderCatalogSqlEditorServices.systemTables();
     }
 
     @Override

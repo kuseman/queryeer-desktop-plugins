@@ -18,6 +18,12 @@
 
     <properties>
         <mongodb.driver.version>5.9.1</mongodb.driver.version>
+        <!--
+            0.3.0 needs Queryeer 0.22 (PayloadbuilderCatalogSqlEditorServices.systemTables()). Until 0.22.0 is published,
+            build against core's snapshot: `mvnw install -pl backend-api,backend-contract,backend-lib-queryengine-payloadbuilder-foundation -am`
+            in core's queryeer-backend. When 0.22.0 is out, remove this and set the parent's queryeer.backend.version.
+        -->
+        <queryeer.backend.version>0.22.0-SNAPSHOT</queryeer.backend.version>
     </properties>
 
     <dependencies>
