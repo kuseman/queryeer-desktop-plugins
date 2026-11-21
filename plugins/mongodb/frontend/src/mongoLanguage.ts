@@ -72,6 +72,8 @@ export const mongoLanguage: EditorLanguageDefinition = {
   },
   configuration: {
     comments: { lineComment: "//", blockComment: ["/*", "*/"] },
+    // Monaco's default without `$`, so `$lt` is one word: completing `$l` replaces it instead of giving `$$lt`
+    wordPattern: /(-?\d*\.\d\w*)|([^`~!@#%^&*()\-=+[{\]}\\|;:'",.<>/?\s]+)/g,
     brackets: [["{", "}"], ["[", "]"], ["(", ")"]],
     autoClosingPairs: [
       { open: "{", close: "}" },

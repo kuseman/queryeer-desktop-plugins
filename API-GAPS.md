@@ -31,7 +31,7 @@ Priority:
 | F2 Form primitives and styles | P1 | ✅ Fixed in core: stable theme variables documented in `DEVELOPMENT-PLUGIN.md`. MongoDB's CSS uses them. |
 | F3 Open Settings at a setting | P2 | ✅ Fixed in core: `settings.open(settingId?)`. MongoDB's ⚙ action and empty state use it. |
 | F4 One call to register a file type | P2 | Open |
-| F5 Monaco language features | P2 | Partly fixed in core (`0b1819f`): `editorLanguages.registerLanguage({ id, aliases, monarch, configuration })`, a plugin-defined language without validation. Completion, hover, parameter hints and diagnostics fixed for 0.22 on core's `feature/api-0.22.0` (`0eb51d4e`): `editorLanguages.registerCompletionProvider`, `registerHoverProvider`, `registerSignatureHelpProvider`, `registerDiagnosticsProvider`. JSON schemas still open. |
+| F5 Monaco language features | P2 | Partly fixed in core (`0b1819f`): `editorLanguages.registerLanguage({ id, aliases, monarch, configuration })`, a plugin-defined language without validation. Completion, hover, parameter hints and diagnostics fixed for 0.22 on core's `feature/api-0.22.0` (`0eb51d4e`): `editorLanguages.registerCompletionProvider`, `registerHoverProvider`, `registerSignatureHelpProvider`, `registerDiagnosticsProvider`. MongoDB uses all four. Found while building it: `ProviderResult` didn't let an `async` provider return `null` (fixed for 0.23 on core's `feature/api-0.23.0`). JSON schemas still open. |
 | F6 Inconsistent `Disposable` returns | P2 | ✅ Fixed in core (working tree, 2026-11-18): every `register*`, `subscribe` and `on*` returns a `Disposable`. Breaking: MongoDB moved to it with 0.20.0 |
 | F7 Late settings registration | P2 | ✅ Fixed in core: `registerSettings` refreshes by itself. |
 | F8 ID helpers | P3 | Open |

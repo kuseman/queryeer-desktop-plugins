@@ -170,8 +170,10 @@ The plugin serves payloadbuilder's `mongodb` catalog from its own connections, r
 - [ ] Release 0.3.0 together with Queryeer 0.22, requiring it (decided 2026-11-21: on 0.21 it would take over the catalog without the table/column completion the built-in one has). Release notes: replaces the built-in `mongodb` catalog, pick the connection again in existing files
 - [x] Report a connection the query picked (`use mongo.connectionId`, or a connection string matching one connection) back to the catalog panel: `buildCatalogPatch` (2026-11-21)
 - [x] Table and column completion: `editorServices()` returns `PayloadbuilderCatalogSqlEditorServices.systemTables()` (Queryeer 0.22, API-GAPS.md B5)
-- [ ] Mongo shell completion, hover and diagnostics through `editorLanguages` (Queryeer 0.22, API-GAPS.md F5)
-- [ ] At release: build against the published 0.22.0 (remove `queryeer.backend.version` from `backend/pom.xml`, `paths` and `--tsconfig-raw` from the frontend, devDependency `^0.22.0`)
+- [x] Editor features through `editorLanguages` (Queryeer 0.22, API-GAPS.md F5), in both forms: completion of collections, methods, fields (the explorer's sample) and operators by where the cursor is (filter, field condition, stage, accumulator, `$field` references, JSON commands); hovers for operators, methods and fields; parameter hints; the backend parser's errors as diagnostics (`mongodb.validate`)
+- [ ] Field value completion (`{ status: |`) from `mongodb.values`, as the query bar's filter has
+- [x] Frontend builds against `@queryeer/api` 0.22.0 from npm. Its async providers return empty results, not `null`: 0.22's `ProviderResult` doesn't allow `null` from an async provider (0.23 does)
+- [ ] Backend: build against `backend-api` 0.22.0 once it is on Maven Central (remove `queryeer.backend.version` from `backend/pom.xml`)
 - [x] Core 0.22: `whenDependencyActive` catches and logs failures itself; the plugin's own try/catch is gone
 - [ ] A later core release (after the GitHub plugin source) removes the built-in Mongo catalog and its connection settings; its release notes point to this plugin
 

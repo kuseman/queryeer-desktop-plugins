@@ -54,6 +54,8 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     static final String ACTION_FIELDS = "mongodb.fields";
     static final String ACTION_VALUES = "mongodb.values";
     static final String ACTION_DOCUMENTS = "mongodb.documents";
+    /** Parses and checks a file's text as a run would, without a connection: the editor's diagnostics. */
+    static final String ACTION_VALIDATE = "mongodb.validate";
     /** At most this many documents per "Copy document". */
     static final int DOCUMENTS_LIMIT = 1_000;
     static final long DOCUMENTS_MAX_TIME_MS = 10_000;
@@ -78,7 +80,6 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     private final FileConnections fileConnections;
     private final LargeValueStore largeValues;
     private final LoggerService logger;
-    private final CommandParser parser = new CommandParser();
     private final CommandPolicy policy = new CommandPolicy();
     private final CommandRunner runner;
     private final Map<String, Execution> executions = new ConcurrentHashMap<>();
@@ -123,7 +124,8 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
                         : watchdogs.schedule(() -> execution.stop("TIMEOUT", "Query timed out after " + timeoutMs + " ms", logger), timeoutMs, TimeUnit.MILLISECONDS);
         try
         {
-            List<ParsedCommand> commands = parser.parse(text);
+            // A parser per run: it keeps its position in fields
+            List<ParsedCommand> commands = new CommandParser().parse(text);
             commands.forEach(policy::validate);
 
             Map<?, ?> state = engineState instanceof Map<?, ?> map ? map
@@ -208,6 +210,32 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
         }
     }
 
+    /**
+     * The problems a run of {@code text} would report before connecting: at most one, since parsing stops at the first. Each is
+     * {@code { message, line, column }}, the position 1-based. Only problems with a position, which the editor can underline: an empty
+     * file isn't an error while typing.
+     */
+    static List<Map<String, Object>> validate(String text)
+    {
+        try
+        {
+            new CommandParser().parse(text)
+                    .forEach(new CommandPolicy()::validate);
+            return List.of();
+        }
+        catch (QueryValidationException e)
+        {
+            if (e.line() <= 0)
+            {
+                return List.of();
+            }
+            Map<String, Object> problem = new LinkedHashMap<>();
+            problem.put("message", e.getMessage());
+            problem.putAll(e.details());
+            return List.of(problem);
+        }
+    }
+
     @Override
     public void cancel(String queryExecutionId)
     {
@@ -227,6 +255,11 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
         if (ACTION_TEST_CONNECTION.equals(action))
         {
             return testConnection(map.get("connection"));
+        }
+        if (ACTION_VALIDATE.equals(action))
+        {
+            return validate(map.get("text") instanceof String text ? text
+                    : "");
         }
 
         Map<?, ?> state = map.get("engineState") instanceof Map<?, ?> s ? s
