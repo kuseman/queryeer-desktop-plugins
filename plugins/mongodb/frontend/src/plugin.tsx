@@ -26,6 +26,8 @@ import { registerGridActions } from "./gridActions.js";
 import { MongoQueryBar } from "./MongoQueryBar.js";
 import { MONGO_LANGUAGE_ID, mongoLanguage } from "./mongoLanguage.js";
 import { mongoOutline } from "./mongoOutline.js";
+import { createMongoEditorData } from "./mongoEditorData.js";
+import { createMongoEditorFeatures } from "./mongoEditorFeatures.js";
 import { PlanActions } from "./planActions.js";
 import { PAYLOADBUILDER_PLUGIN_ID, registerPayloadbuilderCatalog } from "./payloadbuilderCatalog.js";
 import styles from "./styles.css";
@@ -74,6 +76,12 @@ function registerFileType(context: PluginContext): void {
   // Highlighting for both forms a .mongo file can hold: JSON command documents and shell statements
   disposables.push(context.editorLanguages.registerLanguage(mongoLanguage));
   disposables.push(context.editorLanguages.registerMimeType(MIME_TYPE, MONGO_LANGUAGE_ID));
+  // Completion of collections, methods, fields and operators, their hovers and parameter hints, and the backend parser's errors
+  const features = createMongoEditorFeatures(createMongoEditorData(context));
+  disposables.push(context.editorLanguages.registerCompletionProvider(MONGO_LANGUAGE_ID, features.completion));
+  disposables.push(context.editorLanguages.registerHoverProvider(MONGO_LANGUAGE_ID, features.hover));
+  disposables.push(context.editorLanguages.registerSignatureHelpProvider(MONGO_LANGUAGE_ID, features.signatureHelp));
+  disposables.push(context.editorLanguages.registerDiagnosticsProvider(MONGO_LANGUAGE_ID, features.diagnostics));
   // One outline entry per statement, like core's JSON and SQL outlines (@outline-pattern needs core: API-GAPS.md F24)
   context.outline.registerOutlineProvider({ mimeType: MIME_TYPE, provider: mongoOutline });
 }
