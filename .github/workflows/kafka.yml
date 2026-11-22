@@ -1,0 +1,73 @@
+name: Kafka plugin
+
+# Builds and tests only when the Kafka plugin or something it is built with changes.
+# Pushes run on master only: a branch with an open pull request is tested by the pull_request run,
+# and a branch without one can be run by hand (workflow_dispatch)
+on:
+  push:
+    branches:
+      - master
+    paths: &paths
+      - "plugins/kafka/**"
+      - "shared/**"
+      - "pom.xml"
+      - "mvnw"
+      - "mvnw.cmd"
+      - ".mvn/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/kafka.yml"
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kafka:
+    name: Kafka plugin
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          # Full history and tags: the changelog is generated from this plugin's commits since each release tag
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: "25"
+          distribution: zulu
+          cache: maven
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      # plugin.json, the backend pom.xml and the frontend package.json must name the same version
+      - name: Check version
+        run: node shared/scripts/plugin-version.mjs plugins/kafka
+
+      # Frontend typecheck and unit tests, then backend unit and Testcontainers tests (Docker is available on the Ubuntu runner)
+      - name: Test
+        run: npm run kafka:test
+
+      - name: Package and verify
+        run: npm run kafka:package
+
+      - name: Upload plugin package
+        uses: actions/upload-artifact@v7
+        with:
+          name: com.queryeer.kafka
+          path: |
+            dist/*.zip
+            dist/*.zip.sha256
+          if-no-files-found: error

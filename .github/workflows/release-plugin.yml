@@ -14,6 +14,7 @@ on:
         required: true
         type: choice
         options:
+          - kafka
           - mongodb
           - mysql
       dry_run:
