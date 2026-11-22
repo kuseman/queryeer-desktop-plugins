@@ -1,0 +1,20 @@
+{
+  "$schema": "../../shared/schema/plugin.json.schema.v1.json",
+  "schemaVersion": 1,
+  "id": "com.queryeer.kafka",
+  "name": "Kafka",
+  "version": "0.1.0",
+  "description": "Kafka connections for Queryeer Desktop, and the payloadbuilder kafka catalog over them",
+  "dependencies": [
+    { "id": "queryengine.payloadbuilder", "version": ">=0.23.0 <1.0.0", "optional": true }
+  ],
+  "backend": {
+    "entrypointClass": "com.queryeer.plugin.kafka.KafkaBackendPlugin",
+    "minJavaVersion": "25"
+  },
+  "frontend": {
+    "entryModule": "./frontend/dist/index.js",
+    "moduleFormat": "esm",
+    "apiVersion": ">=0.23.0 <1.0.0"
+  }
+}
