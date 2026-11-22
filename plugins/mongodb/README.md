@@ -17,7 +17,7 @@ The first-milestone design is agreed (see [Design](#design)).
 - the execution-context provider
 - payloadbuilder's `mongodb` catalog over the plugin's connections, when payloadbuilder is installed (see [PayloadBuilder catalog](#payloadbuilder-catalog))
 
-It needs Queryeer Desktop 0.22 or later. It builds against `@queryeer/api` 0.22.0 from npm and, until 0.22.0 reaches Maven Central, `backend-api` 0.22.0-SNAPSHOT installed in the local Maven repository (see `backend/pom.xml`). The explorer, query bar and later work are tracked in [TODO.md](TODO.md); the changelog is generated from commit subjects (see [Building](#building)).
+It needs Queryeer Desktop 0.22 or later. It builds against `@queryeer/api` 0.22.0 from npm and `backend-api` 0.22.0 from Maven Central. The explorer, query bar and later work are tracked in [TODO.md](TODO.md); the changelog is generated from commit subjects (see [Building](#building)).
 
 Missing host APIs found along the way are tracked in [API-GAPS.md](../../API-GAPS.md).
 

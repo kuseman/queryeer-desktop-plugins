@@ -173,7 +173,7 @@ The plugin serves payloadbuilder's `mongodb` catalog from its own connections, r
 - [x] Editor features through `editorLanguages` (Queryeer 0.22, API-GAPS.md F5), in both forms: completion of collections, methods, fields (the explorer's sample) and operators by where the cursor is (filter, field condition, stage, accumulator, `$field` references, JSON commands); hovers for operators, methods and fields; parameter hints; the backend parser's errors as diagnostics (`mongodb.validate`)
 - [ ] Field value completion (`{ status: |`) from `mongodb.values`, as the query bar's filter has
 - [x] Frontend builds against `@queryeer/api` 0.22.0 from npm. Its async providers return empty results, not `null`: 0.22's `ProviderResult` doesn't allow `null` from an async provider (0.23 does)
-- [ ] Backend: build against `backend-api` 0.22.0 once it is on Maven Central (remove `queryeer.backend.version` from `backend/pom.xml`)
+- [x] Backend builds against `backend-api` 0.22.0 from Maven Central
 - [x] Core 0.22: `whenDependencyActive` catches and logs failures itself; the plugin's own try/catch is gone
 - [ ] A later core release (after the GitHub plugin source) removes the built-in Mongo catalog and its connection settings; its release notes point to this plugin
 
