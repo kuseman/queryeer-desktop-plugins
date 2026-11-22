@@ -6,8 +6,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import com.mongodb.client.MongoClient;
 import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogProviderContributor;
 import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogSqlEditorServices;
+import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogSqlEditorServices.TableColumn;
+import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogSqlEditorServices.TableColumns;
+import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogSqlEditorServices.TableColumnsRequest;
 
 import se.kuseman.payloadbuilder.api.catalog.Catalog;
 import se.kuseman.payloadbuilder.api.execution.IQuerySession;
@@ -20,17 +24,23 @@ import se.kuseman.payloadbuilder.catalog.mongodb.MongoCatalog;
  *
  * <p>
  * Payloadbuilder's catalog builds its own client from these properties; a TLS connection that allows invalid certificates also sets {@link MongoCatalog#TLS_ALLOW_INVALID_CERTIFICATES_KEY}
- * (payloadbuilder 1.16). Table and column completion, hover and symbols come from the catalog's system tables ({@link PayloadbuilderCatalogSqlEditorServices#systemTables()},
- * Queryeer 0.22), as for Queryeer's built-in catalogs.
+ * (payloadbuilder 1.16). Table and column completion, hover and symbols come from the catalog's system tables, as for Queryeer's built-in catalogs. Payloadbuilder's {@code sys#columns} lists only
+ * {@code _id} and single-field indexed fields, so the fields of a collection the query references are also sampled, as the explorer does but smaller
+ * ({@link PayloadbuilderCatalogSqlEditorServices#systemTables(TableColumns)}, Queryeer 0.23).
  * </p>
  */
 final class PayloadbuilderMongoCatalogProvider implements PayloadbuilderCatalogProviderContributor
 {
     static final String CATALOG_ID = "mongodb";
     static final String KEY_CONNECTION_ID = "connectionId";
+    /** Completion waits for the sample, so it is smaller and stops sooner than the explorer's. */
+    static final int COMPLETION_SAMPLE_SIZE = 100;
+    static final long COMPLETION_SAMPLE_MAX_TIME_MS = 2_000;
 
     private final MongoClientCache clients;
     private final MongoCatalog catalog = new MongoCatalog();
+    /** One instance: its cache of sampled fields lives in it. */
+    private final PayloadbuilderCatalogSqlEditorServices editorServices = PayloadbuilderCatalogSqlEditorServices.systemTables(this::sampledColumns);
 
     PayloadbuilderMongoCatalogProvider(MongoClientCache clients)
     {
@@ -52,7 +62,46 @@ final class PayloadbuilderMongoCatalogProvider implements PayloadbuilderCatalogP
     @Override
     public PayloadbuilderCatalogSqlEditorServices editorServices()
     {
-        return PayloadbuilderCatalogSqlEditorServices.systemTables();
+        return editorServices;
+    }
+
+    /**
+     * The fields of {@code database.collection} from a sample of {@value #COMPLETION_SAMPLE_SIZE} documents: top-level fields and those one level down ({@code payload.orderId}), with their types
+     * and how often they occurred. None without a connection, or when the sample fails or runs out of time.
+     */
+    List<TableColumn> sampledColumns(TableColumnsRequest request)
+    {
+        String connectionId = stringValue(request.properties(), KEY_CONNECTION_ID);
+        // A database name never contains '.', a collection name may
+        int dot = request.table()
+                .indexOf('.');
+        if (connectionId == null
+                || connectionId.isBlank()
+                || dot <= 0
+                || dot == request.table()
+                        .length() - 1)
+        {
+            return List.of();
+        }
+        MongoClient client = clients.get(connectionId)
+                .client();
+        List<Map<String, Object>> fields = MongoQueryEngineProvider.sampleFields(client, request.table()
+                .substring(0, dot),
+                request.table()
+                        .substring(dot + 1),
+                COMPLETION_SAMPLE_SIZE, COMPLETION_SAMPLE_MAX_TIME_MS);
+        return fields.stream()
+                .map(PayloadbuilderMongoCatalogProvider::tableColumn)
+                .toList();
+    }
+
+    private static TableColumn tableColumn(Map<String, Object> field)
+    {
+        @SuppressWarnings("unchecked")
+        List<String> types = (List<String>) field.getOrDefault("types", List.of());
+        String detail = "In %d of %d sampled documents".formatted((Long) field.get("count"), (Long) field.get("sampled"));
+        return new TableColumn((String) field.get("name"), types.isEmpty() ? null
+                : String.join(" | ", types), detail);
     }
 
     @Override

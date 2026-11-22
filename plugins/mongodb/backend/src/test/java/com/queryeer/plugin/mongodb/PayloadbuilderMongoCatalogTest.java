@@ -2,6 +2,7 @@ package com.queryeer.plugin.mongodb;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -98,11 +99,15 @@ class PayloadbuilderMongoCatalogTest
     }
 
     @Test
-    void offersCompletionFromTheCatalogsSystemTables()
+    void offersCompletionFromTheCatalogsSystemTablesAndSampledFields()
     {
         MongoClientCache clients = new MongoClientCache(config(), logger(new ArrayList<>()));
+        PayloadbuilderMongoCatalogProvider provider = new PayloadbuilderMongoCatalogProvider(clients);
 
-        assertSame(PayloadbuilderCatalogSqlEditorServices.systemTables(), new PayloadbuilderMongoCatalogProvider(clients).editorServices());
+        // The editor services keep the sampled fields cached, so every call returns the same instance
+        PayloadbuilderCatalogSqlEditorServices services = provider.editorServices();
+        assertNotSame(PayloadbuilderCatalogSqlEditorServices.systemTables(), services);
+        assertSame(services, provider.editorServices());
     }
 
     @Test

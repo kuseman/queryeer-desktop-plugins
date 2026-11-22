@@ -57,7 +57,7 @@ Priority:
 | B1 File session on rebind | P1 | ✅ Fixed in core: `bindEngine` sends a binding-aware `file.change`. Deferred until the next edit when the host cannot resolve the text. |
 | B2 Columns fixed at result-set start | P2 | Open (needs design) |
 | B3 Warning severity | P2 | ✅ Fixed in core: `OutputSeverity.WARNING` / `"warning"` end to end. |
-| B5 Plugin catalogs get no SQL editor services | P2 | Fixed in core for 0.22 (`249cc94c` on `feature/api-0.22.0`): `PayloadbuilderCatalogSqlEditorServices.systemTables()`. MongoDB's `mongodb` catalog ships without table/column completion until a release that needs 0.22 |
+| B5 Plugin catalogs get no SQL editor services | P2 | Fixed in core for 0.22 (`249cc94c` on `feature/api-0.22.0`): `PayloadbuilderCatalogSqlEditorServices.systemTables()`. MongoDB 0.3.0 uses it (checked in the app 2026-11-22). Found while testing it: quoted names such as `mongo#"db".orders` got no columns (fixed for 0.23, `b8daf934` on `feature/api-0.23.0`), and a view in the database broke `sys#columns` for every collection (fixed in payloadbuilder 1.17, `637a709`) Columns beyond `sys#columns`, looked up per referenced table (MongoDB samples documents), come from `systemTables(TableColumns)` in core 0.23 (uncommitted on `feature/api-0.23.0`). |
 | P1 Payloadbuilder's Mongo catalog can't trust invalid certificates | P3 | ✅ Fixed in payloadbuilder 1.16.0: catalog property `tlsAllowInvalidCertificates`, which MongoDB's catalog sets (2026-11-20) |
 | B4 Runner working directory | P3 | ✅ Fixed in core: `queryeer.builtins.dir` / `QUERYEER_BUILTINS_DIR`. MongoDB's smoke test uses it. |
 | D1 Developer plugin folders | P1 | ✅ Fixed in core (working tree, 2026-11-19): `QUERYEER_DEV_PLUGINS`, `DEVELOPMENT-PLUGIN.md` §8.4 |

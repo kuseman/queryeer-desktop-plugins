@@ -15,6 +15,7 @@ The first-milestone design is agreed (see [Design](#design)).
 - the connections settings editor, with a **Test connection** button
 - a **MongoDB** sidebar view for MongoDB files, with connection and database pickers, plus a read-only "connection | database" label in the query editor status bar
 - the execution-context provider
+- editor support in `.mongo` files: completion (collections, methods, operators, stages, and fields from the explorer's sample), hover, parameter hints, and the backend parser's errors as diagnostics
 - payloadbuilder's `mongodb` catalog over the plugin's connections, when payloadbuilder is installed (see [PayloadBuilder catalog](#payloadbuilder-catalog))
 
 It needs Queryeer Desktop 0.22 or later. It builds against `@queryeer/api` 0.22.0 from npm and `backend-api` 0.22.0 from Maven Central. The explorer, query bar and later work are tracked in [TODO.md](TODO.md); the changelog is generated from commit subjects (see [Building](#building)).
@@ -38,7 +39,11 @@ With Queryeer's payloadbuilder engine installed (an optional dependency, `querye
 - **Backend:** `PayloadbuilderMongoCatalog`, started by `DependencyExtension.whenDependencyActive`, registers `PayloadbuilderMongoCatalogProvider`, which hands payloadbuilder's `MongoCatalog` (bundled, `payloadbuilder-catalog-mongodb`) a connection string and credentials from the plugin's settings. Only these two classes refer to payloadbuilder types, so the plugin loads and works without payloadbuilder. The catalog uses this plugin's MongoDB driver; a container test runs a payloadbuilder query through it against every supported server version.
 - **Frontend:** `payloadbuilderCatalog.tsx`, registered when `context.isDependencyActive("core.queryengine.payloadbuilder")`.
 - **TLS:** a connection that allows invalid certificates is honoured as by the plugin's own client, through the catalog property `tlsAllowInvalidCertificates` (payloadbuilder 1.16, bundled with the catalog).
-- **Limits:** no table/column completion yet (API-GAPS B5, core 0.22).
+- **Completion and hover** (Queryeer 0.23): tables come from the catalog's system tables, columns from them plus a sample (`PayloadbuilderCatalogSqlEditorServices.systemTables(TableColumns)`).
+  - **Tables:** every collection, as `database.collection`.
+  - **Columns:** payloadbuilder's `sys#columns` lists only `_id` and fields with a single-field index. So the first time a query refers to a collection, the plugin samples 100 of its documents (2-second limit, cached 30 s by core): top-level fields and those one level down (`x.payload.orderId`), with their types and how often they occurred in the hover.
+  - **Quoted names** (`mongo#"db".orders`) work.
+  - **Databases with views:** need payloadbuilder 1.17 (the views fix). Before it, a view broke `sys#columns` and no collection got columns.
 
 ## Decisions
 

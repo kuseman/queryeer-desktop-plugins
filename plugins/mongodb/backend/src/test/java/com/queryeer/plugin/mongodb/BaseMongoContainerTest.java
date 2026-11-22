@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -45,6 +46,7 @@ import com.queryeer.backend.api.OutputSeverity;
 import com.queryeer.backend.api.SecuritySessionClosedException;
 import com.queryeer.backend.api.SettingsModule;
 import com.queryeer.backend.contract.query.QueryExecuteOptions;
+import com.queryeer.backend.queryengine.payloadbuilder.PayloadbuilderCatalogSqlEditorServices;
 
 import se.kuseman.payloadbuilder.core.JsonOutputWriter;
 import se.kuseman.payloadbuilder.core.Payloadbuilder;
@@ -147,6 +149,30 @@ abstract class BaseMongoContainerTest
         // One JSON object per row
         assertEquals("{\"_id\":1,\"total\":10}{\"_id\":3,\"total\":30}{\"_id\":4,\"total\":40}", json.toString()
                 .replaceAll("\s", ""));
+    }
+
+    @Test
+    void sqlCompletionGetsTheSampledFieldsOfACollection()
+    {
+        PayloadbuilderMongoCatalogProvider catalogProvider = new PayloadbuilderMongoCatalogProvider(clientCache);
+
+        List<PayloadbuilderCatalogSqlEditorServices.TableColumn> columns = catalogProvider.sampledColumns(columnsRequest(Map.of("connectionId", "local"), "shop.orders"));
+
+        Map<String, PayloadbuilderCatalogSqlEditorServices.TableColumn> byName = new LinkedHashMap<>();
+        columns.forEach(column -> byName.put(column.name(), column));
+        assertEquals(List.of("_id", "status", "total", "customer", "customer.name", "note", "tags"), new ArrayList<>(byName.keySet()));
+        assertEquals(new PayloadbuilderCatalogSqlEditorServices.TableColumn("total", "int", "In 5 of 5 sampled documents"), byName.get("total"));
+        assertEquals(new PayloadbuilderCatalogSqlEditorServices.TableColumn("customer.name", "string", "In 2 of 5 sampled documents"), byName.get("customer.name"));
+        assertEquals("array", byName.get("tags")
+                .type());
+        // Nothing to sample without a connection or a database.collection name
+        assertEquals(List.of(), catalogProvider.sampledColumns(columnsRequest(Map.of(), "shop.orders")));
+        assertEquals(List.of(), catalogProvider.sampledColumns(columnsRequest(Map.of("connectionId", "local"), "orders")));
+    }
+
+    private static PayloadbuilderCatalogSqlEditorServices.TableColumnsRequest columnsRequest(Map<String, Object> properties, String table)
+    {
+        return new PayloadbuilderCatalogSqlEditorServices.TableColumnsRequest("mongo", PayloadbuilderMongoCatalogProvider.CATALOG_ID, properties, null, null, null, table);
     }
 
     @AfterAll
