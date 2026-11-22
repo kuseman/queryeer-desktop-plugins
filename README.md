@@ -4,7 +4,10 @@ Verified plugins for [Queryeer Desktop](https://github.com/kuseman/queryeer-desk
 
 | Plugin | ID | Folder | Status |
 |---|---|---|---|
-| MongoDB | `com.queryeer.mongodb` | [`plugins/mongodb`](plugins/mongodb/README.md) | In design / scaffolding |
+| MongoDB | `com.queryeer.mongodb` | [`plugins/mongodb`](plugins/mongodb/README.md) | Released: native MongoDB query engine |
+| MySQL and MariaDB | `com.queryeer.jdbc.mysql` | [`plugins/mysql`](plugins/mysql/README.md) | Released: dialect for Queryeer's JDBC engine |
+
+Current versions are on the [Releases](../../releases) page; the [catalog](#repository-and-releases) will list them once it exists.
 
 Each plugin is built, versioned and released independently. Queryeer discovers verified plugins through [`catalog/index.json`](#repository-and-releases), so users never need to add several repositories.
 
@@ -40,7 +43,7 @@ The vendored schema in `shared/schema/` must be refreshed whenever Queryeer chan
 - **Ranges on Queryeer:** the plugins here accept every Queryeer from the one they need up to 1.0, e.g. `">=0.20.0 <1.0.0"` on `queryengine.jdbc` and in `frontend.apiVersion`, rather than `^0.20.0`, which would need a plugin release for each core minor version. They are maintained alongside core and run against each new core in development, where ranges aren't enforced anyway. The cost: a core change that breaks a plugin shows as a runtime error rather than a clean skip. So before a core release, build and test the plugins against it (`npm run <plugin>:test` with `queryeer.backend.version` and `@queryeer/api` bumped). Raise the lower bound when a plugin starts using something newer.
 - **Tags:** `<short-name>/v<semver>`, e.g. `mongodb/v0.1.0`.
 - **Release assets:** `<plugin-id>-<version>.zip` plus `<plugin-id>-<version>.zip.sha256`, e.g. `com.queryeer.mongodb-0.1.0.zip`. Each tag gets its own GitHub Release; prereleases use GitHub's prerelease flag.
-- **CI:** one workflow per plugin, filtered by path, so a change under `plugins/mongodb/**` builds and tests only MongoDB ([mongodb.yml](.github/workflows/mongodb.yml): typecheck, unit tests, Testcontainers tests, package and verify; the ZIP is uploaded as a build artifact). A tag push builds only the tagged plugin (see Releasing below).
+- **CI:** one workflow per plugin, filtered by path, so a change under `plugins/mongodb/**` builds and tests only MongoDB ([mongodb.yml](.github/workflows/mongodb.yml), and [mysql.yml](.github/workflows/mysql.yml) for MySQL: typecheck, unit tests, Testcontainers tests, package and verify; the ZIP is uploaded as a build artifact). A tag push builds only the tagged plugin (see Releasing below).
   - The plugin API comes from npm (`@queryeer/api`) and Maven Central (`backend-api`, `backend-contract`), so CI needs no Queryeer Desktop checkout.
 - **Releasing** works like Queryeer Desktop's, in two steps:
   1. **Create Plugin Release** ([create-plugin-release.yml](.github/workflows/create-plugin-release.yml), run by hand on `master`):

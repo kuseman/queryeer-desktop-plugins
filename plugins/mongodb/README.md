@@ -279,7 +279,7 @@ From the repository root (requires Java 25, Node 20+, and Docker for the Testcon
 
 To get a database that exercises the explorer and query bar, run [`scripts/seed-showcase.js`](scripts/seed-showcase.js) with `mongosh` against a local server. It creates `qmongo_showcase` with made-up data; see the script's header for what it covers.
 
-The plugin API comes from public registries: `@queryeer/api` from npm and `backend-api` / `backend-contract` from Maven Central, both 0.20.0. No Queryeer Desktop checkout is needed to build or test; only `mongodb:smoke` uses one.
+The plugin API comes from public registries: `@queryeer/api` from npm and `backend-api` / `backend-contract` from Maven Central. Between releases, the root `pom.xml` may point at an unreleased `-SNAPSHOT` (of Queryeer or payloadbuilder) from Sonatype's snapshot repository. No Queryeer Desktop checkout is needed to build or test; only `mongodb:smoke` uses one.
 
 The plugin version lives in three places, which `shared/scripts/plugin-version.mjs` checks against each other (CI runs it):
 - `plugins/mongodb/plugin.json`
