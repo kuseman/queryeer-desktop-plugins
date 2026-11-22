@@ -277,7 +277,7 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
                     .into(new ArrayList<>());
             case ACTION_COLLECTIONS -> listCollections(client, requiredText(map, "database"));
             case ACTION_INDEXES -> listIndexes(client, requiredText(map, "database"), requiredText(map, "collection"));
-            case ACTION_FIELDS -> sampleFields(client, requiredText(map, "database"), requiredText(map, "collection"));
+            case ACTION_FIELDS -> sampleFields(client, requiredText(map, "database"), requiredText(map, "collection"), FIELD_SAMPLE_SIZE, FIELD_SAMPLE_MAX_TIME_MS);
             case ACTION_DOCUMENTS -> documentsById(client, requiredText(map, "database"), requiredText(map, "collection"), requiredText(map, "ids"));
             case ACTION_VALUES -> distinctValues(client, requiredText(map, "database"), requiredText(map, "collection"), requiredText(map, "field"), VALUE_SUGGESTION_EXACT_MAX_DOCUMENTS);
             case ACTION_PING -> {
@@ -422,11 +422,12 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
     /**
      * Fields of a collection or view, inferred from a random sample (MongoDB has no declared schema): {@code { name, types, count, sampled }} for top-level fields, _id first and then most common.
      * Each field that holds an embedded document is followed by its own fields one level down ({@code payload.orderId}), with {@code parent} set and at most {@value #FIELD_SAMPLE_MAX_CHILDREN} per
-     * parent. Keys that dot notation cannot address (containing '.' or starting with '$') are left out one level down. The server stops the sampling after {@value #FIELD_SAMPLE_MAX_TIME_MS} ms.
+     * parent. Keys that dot notation cannot address (containing '.' or starting with '$') are left out one level down. The server stops the sampling after {@code maxTimeMs}: the explorer waits
+     * {@value #FIELD_SAMPLE_MAX_TIME_MS} ms for {@value #FIELD_SAMPLE_SIZE} documents, SQL completion less.
      */
-    private static List<Map<String, Object>> sampleFields(MongoClient client, String database, String collection)
+    static List<Map<String, Object>> sampleFields(MongoClient client, String database, String collection, int sampleSize, long maxTimeMs)
     {
-        List<BsonDocument> pipeline = List.of(BsonDocument.parse("{ \"$sample\": { \"size\": " + FIELD_SAMPLE_SIZE + " } }"), BsonDocument.parse("""
+        List<BsonDocument> pipeline = List.of(BsonDocument.parse("{ \"$sample\": { \"size\": " + sampleSize + " } }"), BsonDocument.parse("""
                 { "$facet": {
                     "sampled": [ { "$count": "n" } ],
                     "fields": [
@@ -449,7 +450,7 @@ final class MongoQueryEngineProvider implements QueryEngineProvider
         BsonDocument facet = client.getDatabase(database)
                 .getCollection(collection, BsonDocument.class)
                 .aggregate(pipeline)
-                .maxTime(FIELD_SAMPLE_MAX_TIME_MS, java.util.concurrent.TimeUnit.MILLISECONDS)
+                .maxTime(maxTimeMs, java.util.concurrent.TimeUnit.MILLISECONDS)
                 .first();
 
         List<Map<String, Object>> result = new ArrayList<>();

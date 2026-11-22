@@ -121,8 +121,9 @@ Through the public `tableOutputContextMenu`.
 
 ## 7. Completion and validation in the editor
 
-- [ ] Command and stage names, operators, and field names from the schema sample
-- [ ] Blocked on core: API-GAPS.md F5 (language features for plugin languages)
+- [x] Command and stage names, operators, and field names from the schema sample (0.3.0, see §10)
+- [x] Core: API-GAPS.md F5, language features for plugin languages (Queryeer 0.22)
+- [ ] Field value completion: see §10
 
 ## 8. Releasing (done: 0.1.0, then 0.2.0 on 2026-11-19)
 
