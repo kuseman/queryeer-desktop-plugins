@@ -174,6 +174,7 @@ The plugin serves payloadbuilder's `mongodb` catalog from its own connections, r
 - [ ] Field value completion (`{ status: |`) from `mongodb.values`, as the query bar's filter has
 - [x] Frontend builds against `@queryeer/api` 0.22.0 from npm. Its async providers return empty results, not `null`: 0.22's `ProviderResult` doesn't allow `null` from an async provider (0.23 does)
 - [x] Backend builds against `backend-api` 0.22.0 from Maven Central
+- [ ] Before releasing 0.3.0: set the root `pom.xml`'s `payloadbuilder.version` to a released payloadbuilder that includes the views fix. It is `1.17.0-SNAPSHOT` now, from Sonatype's snapshot repository. Without the fix, a database with a view breaks `sys#columns`, so the catalog's column completion is empty for every collection
 - [x] Core 0.22: `whenDependencyActive` catches and logs failures itself; the plugin's own try/catch is gone
 - [ ] A later core release (after the GitHub plugin source) removes the built-in Mongo catalog and its connection settings; its release notes point to this plugin
 

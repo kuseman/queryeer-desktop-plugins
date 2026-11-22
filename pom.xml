@@ -15,6 +15,24 @@
     <packaging>pom</packaging>
     <name>Queryeer Desktop Plugins</name>
 
+    <!--
+        Unreleased Queryeer and payloadbuilder versions (-SNAPSHOT), published by their snapshot workflows. A plugin
+        may build against them between releases, but is never released while it depends on one.
+    -->
+    <repositories>
+        <repository>
+            <id>central-snapshots</id>
+            <name>Sonatype Central snapshots</name>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+            <snapshots>
+                <enabled>true</enabled>
+            </snapshots>
+        </repository>
+    </repositories>
+
     <modules>
         <module>plugins/mongodb/backend</module>
         <module>plugins/mysql/backend</module>
@@ -27,7 +45,7 @@
         <!-- Queryeer host contracts (provided by the host at runtime) -->
         <queryeer.backend.version>0.21.0</queryeer.backend.version>
         <!-- The payloadbuilder catalogs a plugin bundles (com.queryeer.mongodb's mongodb catalog) -->
-        <payloadbuilder.version>1.16.0</payloadbuilder.version>
+        <payloadbuilder.version>1.17.0-SNAPSHOT</payloadbuilder.version>
 
         <junit.version>5.12.0</junit.version>
         <testcontainers.version>2.0.5</testcontainers.version>
