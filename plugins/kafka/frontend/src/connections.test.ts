@@ -1,5 +1,43 @@
-import { describe, expect, it } from "vitest";
-import { connectionLabel, parseConnections, serializeConnection, validateConnection, type KafkaConnection } from "./connections.js";
+import { describe, expect, it, vi } from "vitest";
+import { cloneConnection, connectionLabel, parseConnections, serializeConnection, validateConnection, type KafkaConnection } from "./connections.js";
+
+describe("cloneConnection", () => {
+  const source: KafkaConnection = {
+    connectionId: "prod",
+    title: "Prod",
+    bootstrapServers: "b:9093",
+    securityProtocol: "SASL_SSL",
+    saslMechanism: "SCRAM-SHA-512",
+    username: "app",
+    password: { secretRef: "pw" },
+    saslJaasConfig: { secretRef: "jaas" },
+    enabled: true
+  };
+
+  it("gives the copy its own vault copy of every secret, through the host", async () => {
+    // Stands in for context.settings.copySecrets
+    const copySecrets = vi.fn(async <T,>(value: T): Promise<T> => {
+      const connection = value as KafkaConnection;
+      return { ...connection, password: { secretRef: "pw-copy" }, saslJaasConfig: { secretRef: "jaas-copy" } } as T;
+    });
+    const copy = await cloneConnection(source, copySecrets);
+
+    expect(copySecrets).toHaveBeenCalledWith(source);
+    expect(copy.connectionId).not.toBe("prod");
+    expect(copy).toMatchObject({ title: "Prod (copy)", bootstrapServers: "b:9093", saslMechanism: "SCRAM-SHA-512", username: "app" });
+    expect(copy.password).toEqual({ secretRef: "pw-copy" });
+    expect(copy.saslJaasConfig).toEqual({ secretRef: "jaas-copy" });
+    expect(source.password).toEqual({ secretRef: "pw" });
+  });
+
+  it("leaves the secrets out without the host's copySecrets, so the two rows never share a vault entry", async () => {
+    const copy = await cloneConnection(source, undefined);
+
+    expect(copy).toMatchObject({ title: "Prod (copy)", username: "app" });
+    expect(copy.password).toBeUndefined();
+    expect(copy.saslJaasConfig).toBeUndefined();
+  });
+});
 
 describe("parseConnections", () => {
   it("skips incomplete and duplicate entries and normalises the security settings", () => {
