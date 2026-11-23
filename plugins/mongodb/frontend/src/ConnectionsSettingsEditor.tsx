@@ -1,12 +1,14 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { PluginContext } from "@queryeer/api/plugin/Plugin";
 import {
+  cloneConnection,
   connectionLabel,
   newConnection,
   parseConnectionString,
   parseConnections,
   serializeConnection,
   validateConnection,
+  type CopySecrets,
   type MongoConnection
 } from "./connections.js";
 
@@ -19,10 +21,12 @@ type Props = {
   /** Host components: CollectionSettingsListEditor, useCollectionSettingsPersistence and PasswordFieldInput. */
   components: PluginContext["components"];
   testConnection: (connection: Record<string, unknown>) => Promise<TestConnectionResult>;
+  /** The host's `settings.copySecrets` (Queryeer 0.23), so a clone gets its own copy of the password. */
+  copySecrets: CopySecrets | undefined;
 };
 
 /** MongoDB connections in the host's list/detail settings editor, with plugin-rendered detail fields. */
-export function ConnectionsSettingsEditor({ value, readonly, setValue, components, testConnection }: Props): JSX.Element {
+export function ConnectionsSettingsEditor({ value, readonly, setValue, components, testConnection, copySecrets }: Props): JSX.Element {
   const { CollectionSettingsListEditor, PasswordFieldInput, useCollectionSettingsPersistence } = components;
   const [rows, setRows] = useState<MongoConnection[]>(() => parseConnections(value));
   const [selectedId, setSelectedId] = useState<string | undefined>(() => rows[0]?.connectionId);
@@ -35,7 +39,12 @@ export function ConnectionsSettingsEditor({ value, readonly, setValue, component
     persist: (next) => setValue(next.map(serializeConnection))
   });
 
+  // The latest rows, for changes that land after a re-render: a password field's async vault write, or a clone waiting
+  // for its password to be copied. Building on `rows` there would drop rows added since.
+  const rowsRef = useRef(rows);
+
   const commit = (next: MongoConnection[], debounce: boolean, nextSelectedId?: string): void => {
+    rowsRef.current = next;
     setRows(next);
     if (nextSelectedId !== undefined) {
       setSelectedId(nextSelectedId);
@@ -48,26 +57,27 @@ export function ConnectionsSettingsEditor({ value, readonly, setValue, component
   };
 
   const update = (connectionId: string, patch: Partial<MongoConnection>): void => {
-    commit(rows.map((row) => (row.connectionId === connectionId ? { ...row, ...patch } : row)), true);
+    commit(rowsRef.current.map((row) => (row.connectionId === connectionId ? { ...row, ...patch } : row)), true);
     setTestState((state) => ({ ...state, [connectionId]: { running: false } }));
   };
 
   const add = (): void => {
     const row = newConnection();
-    commit([...rows, row], false, row.connectionId);
+    commit([...rowsRef.current, row], false, row.connectionId);
   };
 
-  const clone = (connectionId: string): void => {
-    const source = rows.find((row) => row.connectionId === connectionId);
+  const clone = async (connectionId: string): Promise<void> => {
+    const source = rowsRef.current.find((row) => row.connectionId === connectionId);
     if (source) {
-      const copy: MongoConnection = { ...source, connectionId: crypto.randomUUID(), title: `${connectionLabel(source)} (copy)` };
-      commit([...rows, copy], false, copy.connectionId);
+      const copy = await cloneConnection(source, copySecrets);
+      commit([...rowsRef.current, copy], false, copy.connectionId);
     }
   };
 
   const remove = (connectionId: string): void => {
-    const index = rows.findIndex((row) => row.connectionId === connectionId);
-    const next = rows.filter((row) => row.connectionId !== connectionId);
+    const current = rowsRef.current;
+    const index = current.findIndex((row) => row.connectionId === connectionId);
+    const next = current.filter((row) => row.connectionId !== connectionId);
     commit(next, false, next[index]?.connectionId ?? next[index - 1]?.connectionId ?? "");
   };
 

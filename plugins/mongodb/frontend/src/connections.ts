@@ -1,3 +1,4 @@
+import type { PluginContext } from "@queryeer/api/plugin/Plugin";
 import type { SecretRefValue } from "@queryeer/api/security/Security";
 
 /**
@@ -109,6 +110,23 @@ export function connectionFingerprint(raw: unknown): string {
 
 export function connectionLabel(connection: Pick<MongoConnection, "connectionId" | "title" | "hosts">): string {
   return connection.title?.trim() || connection.hosts || connection.connectionId;
+}
+
+/** `context.settings.copySecrets` (Queryeer 0.23): a deep copy of a value in which every `{ secretRef }` has its own vault entry. */
+export type CopySecrets = <T>(value: T) => Promise<T>;
+
+// copySecrets is PluginContext.settings since @queryeer/api 0.23; this plugin also runs on 0.22, which lacks it
+export function hostCopySecrets(settings: PluginContext["settings"]): CopySecrets | undefined {
+  return (settings as PluginContext["settings"] & { copySecrets?: CopySecrets }).copySecrets?.bind(settings);
+}
+
+/**
+ * A copy with a new ID and its own copy of the password: a shared secretRef would let editing one row's password change
+ * the other's. Without `copySecrets` (Queryeer 0.22), the copy has no password.
+ */
+export async function cloneConnection(source: MongoConnection, copySecrets: CopySecrets | undefined): Promise<MongoConnection> {
+  const copied = copySecrets ? await copySecrets(source) : { ...source, password: undefined };
+  return { ...copied, connectionId: crypto.randomUUID(), title: `${connectionLabel(source)} (copy)` };
 }
 
 /** Serialises for storage: omits empty optional fields so the stored JSON stays readable. */

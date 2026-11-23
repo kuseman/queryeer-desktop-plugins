@@ -3,7 +3,7 @@ import type { ExternalPlugin } from "@queryeer/api/plugin/PluginModule";
 import type { Disposable } from "@queryeer/api/editor/EditorApi";
 import type { CSSProperties } from "react";
 import { buildEngineState, readSelectedDatabase, resolveConnection } from "./binding.js";
-import { connectionFingerprint, isValidConnection, parseConnections } from "./connections.js";
+import { connectionFingerprint, hostCopySecrets, isValidConnection, parseConnections } from "./connections.js";
 import { ConnectionsSettingsEditor, type TestConnectionResult } from "./ConnectionsSettingsEditor.js";
 import {
   ACTION_TEST_CONNECTION,
@@ -111,6 +111,7 @@ function registerSettings(context: PluginContext): void {
         readonly={readonly}
         components={context.components}
         testConnection={(connection) => testConnection(context, connection)}
+        copySecrets={hostCopySecrets(context.settings)}
       />
     )
   });

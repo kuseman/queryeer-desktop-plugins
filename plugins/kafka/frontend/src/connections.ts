@@ -1,3 +1,4 @@
+import type { PluginContext } from "@queryeer/api/plugin/Plugin";
 import type { SecretRefValue } from "@queryeer/api/security/Security";
 
 export type SecurityProtocol = "PLAINTEXT" | "SSL" | "SASL_PLAINTEXT" | "SASL_SSL";
@@ -108,6 +109,24 @@ export function isValidConnection(connection: Partial<KafkaConnection>): boolean
 
 export function connectionLabel(connection: Pick<KafkaConnection, "connectionId" | "title" | "bootstrapServers">): string {
   return connection.title?.trim() || connection.bootstrapServers || connection.connectionId;
+}
+
+/** `context.settings.copySecrets`: a deep copy of a value in which every `{ secretRef }` has its own vault entry. */
+export type CopySecrets = <T>(value: T) => Promise<T>;
+
+// copySecrets is PluginContext.settings in @queryeer/api 0.23, which isn't on npm yet; read it from there once the
+// plugin builds against 0.23
+export function hostCopySecrets(settings: PluginContext["settings"]): CopySecrets | undefined {
+  return (settings as PluginContext["settings"] & { copySecrets?: CopySecrets }).copySecrets?.bind(settings);
+}
+
+/**
+ * A copy with a new ID and its own copy of every secret: a shared secretRef would let editing one row's password change
+ * the other's. Without `copySecrets` (Queryeer before 0.23), the copy has no secrets.
+ */
+export async function cloneConnection(source: KafkaConnection, copySecrets: CopySecrets | undefined): Promise<KafkaConnection> {
+  const copied = copySecrets ? await copySecrets(source) : { ...source, password: undefined, saslJaasConfig: undefined };
+  return { ...copied, connectionId: crypto.randomUUID(), title: `${connectionLabel(source)} (copy)` };
 }
 
 /** Serialises for storage: omits empty optional fields, and credentials the security settings don't use. */

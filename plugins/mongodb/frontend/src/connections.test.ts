@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cloneConnection,
   connectionLabel,
   isValidConnection,
   newConnection,
@@ -8,6 +9,28 @@ import {
   serializeConnection,
   validateConnection
 } from "./connections.js";
+
+describe("cloneConnection", () => {
+  const [source] = parseConnections([{ connectionId: "a", title: "Prod", hosts: "h:1", username: "u", password: { secretRef: "s" } }]);
+
+  it("gives the copy its own vault copy of the password, through the host", async () => {
+    // Stands in for context.settings.copySecrets
+    const copySecrets = async <T,>(value: T): Promise<T> => ({ ...(value as object), password: { secretRef: "s-copy" } }) as T;
+    const copy = await cloneConnection(source, copySecrets);
+
+    expect(copy.connectionId).not.toBe("a");
+    expect(copy).toMatchObject({ title: "Prod (copy)", hosts: "h:1", username: "u" });
+    expect(copy.password).toEqual({ secretRef: "s-copy" });
+    expect(source.password).toEqual({ secretRef: "s" });
+  });
+
+  it("leaves the password out on Queryeer 0.22, so the two rows never share a vault entry", async () => {
+    const copy = await cloneConnection(source, undefined);
+
+    expect(copy).toMatchObject({ title: "Prod (copy)", hosts: "h:1", username: "u" });
+    expect(copy.password).toBeUndefined();
+  });
+});
 
 describe("connection color", () => {
   it("keeps a #rrggbb color through storage and drops anything else", () => {

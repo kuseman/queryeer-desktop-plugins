@@ -1,7 +1,7 @@
 import type { Disposable } from "@queryeer/api/editor/EditorApi";
 import type { PluginContext } from "@queryeer/api/plugin/Plugin";
 import type { ExternalPlugin } from "@queryeer/api/plugin/PluginModule";
-import { isValidConnection, parseConnections } from "./connections.js";
+import { hostCopySecrets, isValidConnection, parseConnections } from "./connections.js";
 import { ConnectionsSettingsEditor, type TestConnectionResult } from "./ConnectionsSettingsEditor.js";
 import {
   ACTION_TEST_CONNECTION,
@@ -73,6 +73,7 @@ function registerSettings(context: PluginContext, backend: PluginBackend): void 
         readonly={readonly}
         components={context.components}
         testConnection={(connection) => testConnection(backend, connection)}
+        copySecrets={hostCopySecrets(context.settings)}
       />
     )
   });
