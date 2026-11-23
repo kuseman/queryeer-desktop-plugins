@@ -23,7 +23,7 @@
             Needs Queryeer 0.23: its own backend actions (BackendPluginContext.actions()). Overrides the parent's version so
             the mysql plugin doesn't move with it.
         -->
-        <queryeer.backend.version>0.23.0-SNAPSHOT</queryeer.backend.version>
+        <queryeer.backend.version>0.23.0</queryeer.backend.version>
     </properties>
 
     <dependencies>

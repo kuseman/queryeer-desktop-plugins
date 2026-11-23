@@ -29,14 +29,6 @@ describe("cloneConnection", () => {
     expect(copy.saslJaasConfig).toEqual({ secretRef: "jaas-copy" });
     expect(source.password).toEqual({ secretRef: "pw" });
   });
-
-  it("leaves the secrets out without the host's copySecrets, so the two rows never share a vault entry", async () => {
-    const copy = await cloneConnection(source, undefined);
-
-    expect(copy).toMatchObject({ title: "Prod (copy)", username: "app" });
-    expect(copy.password).toBeUndefined();
-    expect(copy.saslJaasConfig).toBeUndefined();
-  });
 });
 
 describe("parseConnections", () => {

@@ -35,9 +35,9 @@ From the repository root (requires Java 25, Node 20+, and Docker for the Testcon
 | `npm run kafka:package` | Builds the backend and the frontend, then assembles and verifies `dist/com.queryeer.kafka-<version>.zip`, its `.sha256`, and the unpacked folder `dist/com.queryeer.kafka-<version>/` |
 | `npm run kafka:dev` | Frontend watch mode: rebuilds on save into the unpacked folder. Run `kafka:package` once first |
 
-- **Versions it builds against:** `backend-api` and the payloadbuilder foundation at `0.23.0-SNAPSHOT` (its own `queryeer.backend.version` in `backend/pom.xml`), and the root `pom.xml`'s `payloadbuilder.version` for the bundled `payloadbuilder-catalog-kafka`.
+- **Versions it builds against:** `backend-api` and the payloadbuilder foundation 0.23.0 from Maven Central (its own `queryeer.backend.version` in `backend/pom.xml`), and the root `pom.xml`'s `payloadbuilder.version` for the bundled `payloadbuilder-catalog-kafka`.
 - **Bundled:** `kafka-clients` (`kafka.clients.version`, the version payloadbuilder's catalog is built with), the catalog and its libraries, and `avro` for Avro and schema-registry topics.
-- **`@queryeer/api` 0.23** isn't on npm yet: `frontend/src/pluginBackend.ts` repeats the `PluginBackend` type until it is.
+- **`@queryeer/api` 0.23.0** from npm.
 - **The plugin version** lives in `plugin.json`, the `<version>` in `backend/pom.xml` and `frontend/package.json`. `shared/scripts/plugin-version.mjs` checks that they match.
 - **Development loop:** as for the [MongoDB plugin](../mongodb/README.md#building), with `QUERYEER_DEV_PLUGINS` pointing at the unpacked folder.
 - **A local Kafka to try it on:** `sh plugins/kafka/scripts/local-kafka.sh start`, then `seed` for the topics `orders` (3 partitions, keys and headers), `payments` and `customers`, and a consumer group `billing` part way into `orders`. `status` lists them, `stop` keeps the data, `rm` removes it. Connect with `localhost:9092` and `PLAINTEXT`.

@@ -6,7 +6,7 @@ import type { PayloadbuilderCatalogPanelProps } from "@queryeer/api/queryengine/
 import type { KafkaConnection } from "./connections.js";
 import { ACTION_LIST_TOPICS, LIST_TOPICS_TIMEOUT_MS } from "./constants.js";
 import { kafkaCatalogContribution, resolveRuntimeProperties } from "./payloadbuilderCatalog.js";
-import type { PluginBackend } from "./pluginBackend.js";
+import type { PluginBackend } from "@queryeer/api/plugin/PluginBackend";
 import { testConnection } from "./plugin.js";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

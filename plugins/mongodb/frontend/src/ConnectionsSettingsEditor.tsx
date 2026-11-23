@@ -21,8 +21,8 @@ type Props = {
   /** Host components: CollectionSettingsListEditor, useCollectionSettingsPersistence and PasswordFieldInput. */
   components: PluginContext["components"];
   testConnection: (connection: Record<string, unknown>) => Promise<TestConnectionResult>;
-  /** The host's `settings.copySecrets` (Queryeer 0.23), so a clone gets its own copy of the password. */
-  copySecrets: CopySecrets | undefined;
+  /** The host's `settings.copySecrets`, so a clone gets its own copy of the password. */
+  copySecrets: CopySecrets;
 };
 
 /** MongoDB connections in the host's list/detail settings editor, with plugin-rendered detail fields. */

@@ -22,7 +22,7 @@
             0.3.0 needs Queryeer 0.23 (PayloadbuilderCatalogSqlEditorServices.systemTables(TableColumns)). Overrides the
             parent's version so the mysql plugin doesn't move with it.
         -->
-        <queryeer.backend.version>0.23.0-SNAPSHOT</queryeer.backend.version>
+        <queryeer.backend.version>0.23.0</queryeer.backend.version>
     </properties>
 
     <dependencies>

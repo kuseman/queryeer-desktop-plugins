@@ -7,7 +7,7 @@ import type {
 } from "@queryeer/api/queryengine/PayloadbuilderCatalogExtension";
 import { connectionLabel, parseConnections, type KafkaConnection } from "./connections.js";
 import { ACTION_LIST_TOPICS, CONNECTIONS_SETTING_ID, KAFKA_CATALOG_ID, LIST_TOPICS_TIMEOUT_MS, PAYLOADBUILDER_PLUGIN_ID } from "./constants.js";
-import type { PluginBackend } from "./pluginBackend.js";
+import type { PluginBackend } from "@queryeer/api/plugin/PluginBackend";
 
 /**
  * Offers the `kafka` payloadbuilder catalog over this plugin's connections, when payloadbuilder is there. The backend

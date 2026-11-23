@@ -1,7 +1,7 @@
 import type { Disposable } from "@queryeer/api/editor/EditorApi";
 import type { PluginContext } from "@queryeer/api/plugin/Plugin";
 import type { ExternalPlugin } from "@queryeer/api/plugin/PluginModule";
-import { hostCopySecrets, isValidConnection, parseConnections } from "./connections.js";
+import { isValidConnection, parseConnections } from "./connections.js";
 import { ConnectionsSettingsEditor, type TestConnectionResult } from "./ConnectionsSettingsEditor.js";
 import {
   ACTION_TEST_CONNECTION,
@@ -14,7 +14,7 @@ import {
   TEST_CONNECTION_TIMEOUT_MS
 } from "./constants.js";
 import { registerPayloadbuilderCatalog } from "./payloadbuilderCatalog.js";
-import { pluginBackend, type PluginBackend } from "./pluginBackend.js";
+import type { PluginBackend } from "@queryeer/api/plugin/PluginBackend";
 import styles from "./styles.css";
 
 const STYLE_ELEMENT_ID = "com-queryeer-kafka-styles";
@@ -30,7 +30,7 @@ export const kafkaPlugin: ExternalPlugin = {
   },
 
   activate: (context) => {
-    const backend = pluginBackend(context);
+    const backend = context.backend;
     injectStyles();
     registerSettings(context, backend);
     const catalog = registerPayloadbuilderCatalog(context, backend);
@@ -73,7 +73,7 @@ function registerSettings(context: PluginContext, backend: PluginBackend): void 
         readonly={readonly}
         components={context.components}
         testConnection={(connection) => testConnection(backend, connection)}
-        copySecrets={hostCopySecrets(context.settings)}
+        copySecrets={context.settings.copySecrets.bind(context.settings)}
       />
     )
   });

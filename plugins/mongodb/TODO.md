@@ -158,7 +158,7 @@ A dashboard tab opened from a connection in the explorer: operations per second,
 - [ ] Once core has it: a backend `serverStatusSample` invoke action (`serverStatus`, `replSetGetStatus` on a replica set, `currentOp` for the table), and an explorer "Overview" action that opens the dashboard
 - [ ] Maybe before then: a one-off "Server status" in the explorer that runs `serverStatus` into the grid
 
-## 10. PayloadBuilder catalog (0.3.0, needs Queryeer 0.22)
+## 10. PayloadBuilder catalog (0.3.0, needs Queryeer 0.23)
 
 The plugin serves payloadbuilder's `mongodb` catalog from its own connections, replacing Queryeer's built-in one. Plan: [`specs/engine-catalogs.md`](../../specs/engine-catalogs.md) §3.5; how it works: the README's [PayloadBuilder catalog](README.md#payloadbuilder-catalog).
 
@@ -168,14 +168,14 @@ The plugin serves payloadbuilder's `mongodb` catalog from its own connections, r
 - [x] Verified in Queryeer (2026-11-20), also with payloadbuilder's backend removed: the MongoDB engine keeps working
 - [x] Connections that allow invalid TLS certificates: payloadbuilder 1.16's `tlsAllowInvalidCertificates` (API-GAPS.md P1)
 - [x] No migration of the built-in catalog's connections (decided 2026-11-20): files keep their alias and pick a connection again
-- [ ] Release 0.3.0 together with Queryeer 0.22, requiring it (decided 2026-11-21: on 0.21 it would take over the catalog without the table/column completion the built-in one has). Release notes: replaces the built-in `mongodb` catalog, pick the connection again in existing files
+- [ ] Release 0.3.0 requiring Queryeer 0.23 (decided 2026-11-21: on 0.21 it would take over the catalog without the table/column completion the built-in one has; column completion uses 0.23's `systemTables(TableColumns)`). Release notes: replaces the built-in `mongodb` catalog, pick the connection again in existing files
 - [x] Report a connection the query picked (`use mongo.connectionId`, or a connection string matching one connection) back to the catalog panel: `buildCatalogPatch` (2026-11-21)
 - [x] Table and column completion: `editorServices()` returns `PayloadbuilderCatalogSqlEditorServices.systemTables()` (Queryeer 0.22, API-GAPS.md B5)
 - [x] Editor features through `editorLanguages` (Queryeer 0.22, API-GAPS.md F5), in both forms: completion of collections, methods, fields (the explorer's sample) and operators by where the cursor is (filter, field condition, stage, accumulator, `$field` references, JSON commands); hovers for operators, methods and fields; parameter hints; the backend parser's errors as diagnostics (`mongodb.validate`)
 - [ ] Field value completion (`{ status: |`) from `mongodb.values`, as the query bar's filter has
-- [x] Frontend builds against `@queryeer/api` 0.22.0 from npm. Its async providers return empty results, not `null`: 0.22's `ProviderResult` doesn't allow `null` from an async provider (0.23 does)
-- [x] Backend builds against `backend-api` 0.22.0 from Maven Central
-- [ ] Before releasing 0.3.0: set the root `pom.xml`'s `payloadbuilder.version` to a released payloadbuilder that includes the views fix. It is `1.17.0-SNAPSHOT` now, from Sonatype's snapshot repository. Without the fix, a database with a view breaks `sys#columns`, so the catalog's column completion is empty for every collection
+- [x] Frontend builds against `@queryeer/api` 0.23.0 from npm. Its async providers return empty results, not `null`, a habit from 0.22's `ProviderResult`
+- [x] Backend builds against `backend-api` 0.23.0 from Maven Central (2026-11-23)
+- [x] Root `pom.xml`'s `payloadbuilder.version` is the released 1.17.0, with the views fix (a database with a view broke `sys#columns`, so column completion was empty for every collection) (2026-11-23)
 - [x] Core 0.22: `whenDependencyActive` catches and logs failures itself; the plugin's own try/catch is gone
 - [ ] A later core release (after the GitHub plugin source) removes the built-in Mongo catalog and its connection settings; its release notes point to this plugin
 
