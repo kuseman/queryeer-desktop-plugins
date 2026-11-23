@@ -46,7 +46,7 @@
         <!-- Queryeer host contracts (provided by the host at runtime) -->
         <queryeer.backend.version>0.21.0</queryeer.backend.version>
         <!-- The payloadbuilder catalogs a plugin bundles (com.queryeer.mongodb's mongodb catalog, com.queryeer.kafka's kafka catalog) -->
-        <payloadbuilder.version>1.17.0-SNAPSHOT</payloadbuilder.version>
+        <payloadbuilder.version>1.17.0</payloadbuilder.version>
 
         <junit.version>5.12.0</junit.version>
         <testcontainers.version>2.0.5</testcontainers.version>

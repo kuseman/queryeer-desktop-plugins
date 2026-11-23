@@ -18,7 +18,7 @@ The first-milestone design is agreed (see [Design](#design)).
 - editor support in `.mongo` files: completion (collections, methods, operators, stages, and fields from the explorer's sample), hover, parameter hints, and the backend parser's errors as diagnostics
 - payloadbuilder's `mongodb` catalog over the plugin's connections, when payloadbuilder is installed (see [PayloadBuilder catalog](#payloadbuilder-catalog))
 
-It needs Queryeer Desktop 0.22 or later. It builds against `@queryeer/api` 0.22.0 from npm and `backend-api` 0.22.0 from Maven Central. The explorer, query bar and later work are tracked in [TODO.md](TODO.md); the changelog is generated from commit subjects (see [Building](#building)).
+It needs Queryeer Desktop 0.23 or later. It builds against `@queryeer/api` 0.23.0 from npm and `backend-api` 0.23.0 from Maven Central. The explorer, query bar and later work are tracked in [TODO.md](TODO.md); the changelog is generated from commit subjects (see [Building](#building)).
 
 Missing host APIs found along the way are tracked in [API-GAPS.md](../../API-GAPS.md).
 

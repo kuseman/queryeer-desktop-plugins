@@ -27,7 +27,7 @@ type Props = {
   components: PluginContext["components"];
   testConnection: (connection: Record<string, unknown>) => Promise<TestConnectionResult>;
   /** The host's `settings.copySecrets`, so a clone gets its own copy of the password. */
-  copySecrets: CopySecrets | undefined;
+  copySecrets: CopySecrets;
 };
 
 /** Kafka connections in the host's list/detail settings editor, with plugin-rendered detail fields. */

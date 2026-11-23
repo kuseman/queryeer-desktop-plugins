@@ -112,20 +112,14 @@ export function connectionLabel(connection: Pick<KafkaConnection, "connectionId"
 }
 
 /** `context.settings.copySecrets`: a deep copy of a value in which every `{ secretRef }` has its own vault entry. */
-export type CopySecrets = <T>(value: T) => Promise<T>;
-
-// copySecrets is PluginContext.settings in @queryeer/api 0.23, which isn't on npm yet; read it from there once the
-// plugin builds against 0.23
-export function hostCopySecrets(settings: PluginContext["settings"]): CopySecrets | undefined {
-  return (settings as PluginContext["settings"] & { copySecrets?: CopySecrets }).copySecrets?.bind(settings);
-}
+export type CopySecrets = PluginContext["settings"]["copySecrets"];
 
 /**
  * A copy with a new ID and its own copy of every secret: a shared secretRef would let editing one row's password change
- * the other's. Without `copySecrets` (Queryeer before 0.23), the copy has no secrets.
+ * the other's.
  */
-export async function cloneConnection(source: KafkaConnection, copySecrets: CopySecrets | undefined): Promise<KafkaConnection> {
-  const copied = copySecrets ? await copySecrets(source) : { ...source, password: undefined, saslJaasConfig: undefined };
+export async function cloneConnection(source: KafkaConnection, copySecrets: CopySecrets): Promise<KafkaConnection> {
+  const copied = await copySecrets(source);
   return { ...copied, connectionId: crypto.randomUUID(), title: `${connectionLabel(source)} (copy)` };
 }
 

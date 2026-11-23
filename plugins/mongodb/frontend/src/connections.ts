@@ -112,20 +112,15 @@ export function connectionLabel(connection: Pick<MongoConnection, "connectionId"
   return connection.title?.trim() || connection.hosts || connection.connectionId;
 }
 
-/** `context.settings.copySecrets` (Queryeer 0.23): a deep copy of a value in which every `{ secretRef }` has its own vault entry. */
-export type CopySecrets = <T>(value: T) => Promise<T>;
-
-// copySecrets is PluginContext.settings since @queryeer/api 0.23; this plugin also runs on 0.22, which lacks it
-export function hostCopySecrets(settings: PluginContext["settings"]): CopySecrets | undefined {
-  return (settings as PluginContext["settings"] & { copySecrets?: CopySecrets }).copySecrets?.bind(settings);
-}
+/** `context.settings.copySecrets`: a deep copy of a value in which every `{ secretRef }` has its own vault entry. */
+export type CopySecrets = PluginContext["settings"]["copySecrets"];
 
 /**
  * A copy with a new ID and its own copy of the password: a shared secretRef would let editing one row's password change
- * the other's. Without `copySecrets` (Queryeer 0.22), the copy has no password.
+ * the other's.
  */
-export async function cloneConnection(source: MongoConnection, copySecrets: CopySecrets | undefined): Promise<MongoConnection> {
-  const copied = copySecrets ? await copySecrets(source) : { ...source, password: undefined };
+export async function cloneConnection(source: MongoConnection, copySecrets: CopySecrets): Promise<MongoConnection> {
+  const copied = await copySecrets(source);
   return { ...copied, connectionId: crypto.randomUUID(), title: `${connectionLabel(source)} (copy)` };
 }
 

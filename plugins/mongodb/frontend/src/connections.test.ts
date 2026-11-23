@@ -23,13 +23,6 @@ describe("cloneConnection", () => {
     expect(copy.password).toEqual({ secretRef: "s-copy" });
     expect(source.password).toEqual({ secretRef: "s" });
   });
-
-  it("leaves the password out on Queryeer 0.22, so the two rows never share a vault entry", async () => {
-    const copy = await cloneConnection(source, undefined);
-
-    expect(copy).toMatchObject({ title: "Prod (copy)", hosts: "h:1", username: "u" });
-    expect(copy.password).toBeUndefined();
-  });
 });
 
 describe("connection color", () => {
