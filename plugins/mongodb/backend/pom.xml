@@ -13,7 +13,7 @@
 
     <artifactId>queryeer-mongodb-plugin</artifactId>
     <!-- Must match "version" in ../plugin.json -->
-    <version>0.2.0</version>
+    <version>0.3.0</version>
     <name>Queryeer MongoDB Plugin (backend)</name>
 
     <properties>
