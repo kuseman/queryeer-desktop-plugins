@@ -6,7 +6,8 @@ Verified plugins for [Queryeer Desktop](https://github.com/kuseman/queryeer-desk
 |---|---|---|---|
 | MongoDB | `com.queryeer.mongodb` | [`plugins/mongodb`](plugins/mongodb/README.md) | Released: native MongoDB query engine |
 | MySQL and MariaDB | `com.queryeer.jdbc.mysql` | [`plugins/mysql`](plugins/mysql/README.md) | Released: dialect for Queryeer's JDBC engine |
-| Kafka | `com.queryeer.kafka` | [`plugins/kafka`](plugins/kafka/README.md) | In development: connections and the payloadbuilder kafka catalog (Queryeer 0.23) |
+| Kafka | `com.queryeer.kafka` | [`plugins/kafka`](plugins/kafka/README.md) | Released: connections and the payloadbuilder kafka catalog (Queryeer 0.23) |
+| Elasticsearch | `com.queryeer.elasticsearch` | [`plugins/elasticsearch`](plugins/elasticsearch/README.md) | In development: connections and the payloadbuilder elasticsearch catalog, migrated from Queryeer's own (Queryeer 0.23) |
 
 Current versions are on the [Releases](../../releases) page; the [catalog](#repository-and-releases) will list them once it exists.
 
@@ -25,7 +26,7 @@ queryeer-desktop-plugins/
     mongodb/            plugin.json, backend/ (Maven module), frontend/ (npm workspace), README
     mysql/              MySQL and MariaDB dialect for the JDBC engine; same layout
     kafka/              Kafka connections and the payloadbuilder kafka catalog; same layout
-    elasticsearch/      (planned)
+    elasticsearch/      Elasticsearch connections and the payloadbuilder elasticsearch catalog; same layout
   shared/
     schema/             vendored copy of Queryeer's plugin.json v1 schema
     scripts/            packaging, package verification, ZIP writer, Maven runner, changelog

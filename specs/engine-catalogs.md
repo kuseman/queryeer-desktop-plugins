@@ -164,7 +164,21 @@ Either way, payloadbuilder loses its dependency on `queryengine.jdbc`. Recommend
   - later it gets a lightweight Kafka browser (topics, consumer groups, messages), and the dependency becomes optional.
 - Migration of `core.queryengine.payloadbuilder.kafka.connections`: open; decide when the plugin is built (MongoDB skipped it, §3.5). If it migrates, use `settings.runOnce` and `appShell.copySecret` (never share a `secretRef`).
 - Core removes `KafkaCatalogProvider` and `core.queryengine.payloadbuilder.kafka` in the release this plugin targets.
-- Elasticsearch can follow the same way later. Filesystem and HTTP have no connections and stay with payloadbuilder.
+- Filesystem and HTTP have no connections and stay with payloadbuilder.
+
+### 3.8 Elasticsearch (new plugin in this repository, after Kafka)
+
+- `com.queryeer.elasticsearch`, like Kafka: its own connections module (`com.queryeer.elasticsearch.connections`), the `elasticsearch` catalog with payloadbuilder as an optional dependency, and its own backend actions (`indices.list`, `connection.test`) that work without payloadbuilder.
+- Files keep storing `{ connectionId, index }`, as with the built-in catalog.
+- **Migration** (decided 2026-11-23: the built-in Elasticsearch connections are in use). A `runOnce` task copies `core.queryengine.payloadbuilder.elasticsearch.connections` into the plugin's settings:
+  - connection ids stay the same, so files that use the catalog keep their connection;
+  - each password gets its own vault entry through `settings.copySecrets` (0.23), which works while the vault is locked;
+  - a plain-text password (not a `{ secretRef }`) is skipped: that connection is migrated without it;
+  - connections the plugin already has (by id) are skipped, so a failed run can repeat; core's module is left as it is.
+- The settings validator checks only the structure (unique id, an endpoint), so a migrated connection with a field the editor flags can still be saved.
+- New in the plugin: trust certificate, and connect and read timeouts (payloadbuilder's `trustCertificate`, `connectTimeout`, `receiveTimeout`), which were TODOs in core's provider.
+- Until core drops its built-in catalog, both connection lists show in Settings and edits made after the migration don't sync, as with Kafka and MongoDB.
+- Core removes `ElasticsearchCatalogProvider` and `core.queryengine.payloadbuilder.elasticsearch` in the release this plugin targets.
 
 ## 4. Order and exit criteria
 
