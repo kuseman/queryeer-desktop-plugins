@@ -1,0 +1,17 @@
+/* The welcome screen for SQLite database files. Uses the host theme variables documented as stable in DEVELOPMENT-PLUGIN.md. */
+
+.qsqlite-welcome {
+  margin: 16px; padding: 18px; max-width: 960px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--surface-1, var(--bg-1)); color: var(--text-0);
+}
+.qsqlite-welcome h2 { margin: 0; font-size: 16px; }
+.qsqlite-welcome p { margin: 10px 0 0; max-width: 70ch; color: var(--text-1); }
+.qsqlite-welcome .qsqlite-path { margin-top: 6px; font-family: var(--font-mono, monospace); word-break: break-all; }
+.qsqlite-actions { display: flex; gap: 8px; margin-top: 16px; }
+.qsqlite-button {
+  min-height: 28px; padding: 2px 12px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface-1, var(--bg-1)); color: var(--text-0); cursor: pointer;
+}
+.qsqlite-primary { border-color: var(--accent); }
+.qsqlite-button:disabled { opacity: 0.6; cursor: default; }
+.qsqlite-welcome .qsqlite-error { color: var(--state-error, #e57373); }
