@@ -38,6 +38,7 @@
         <module>plugins/kafka/backend</module>
         <module>plugins/elasticsearch/backend</module>
         <module>plugins/mysql/backend</module>
+        <module>plugins/sqlite/backend</module>
     </modules>
 
     <properties>

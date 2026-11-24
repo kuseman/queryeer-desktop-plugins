@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.queryeer.plugins</groupId>
+        <artifactId>queryeer-desktop-plugins</artifactId>
+        <version>0-SNAPSHOT</version>
+        <relativePath>../../../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>queryeer-jdbc-sqlite-plugin</artifactId>
+    <!-- Must match "version" in ../plugin.json -->
+    <version>0.1.0</version>
+    <name>Queryeer SQLite Dialect (backend)</name>
+
+    <properties>
+        <!-- The driver is never bundled: core's driver service downloads it into libShared. Tests only. -->
+        <sqlite.jdbc.version>3.49.1.0</sqlite.jdbc.version>
+        <mockito.version>5.23.0</mockito.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.queryeer.backend</groupId>
+            <artifactId>backend-api</artifactId>
+            <version>${queryeer.backend.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.queryeer.backend</groupId>
+            <artifactId>backend-contract</artifactId>
+            <version>${queryeer.backend.version}</version>
+        </dependency>
+        <dependency>
+            <!-- Provided by Queryeer's built-in JDBC plugin at runtime -->
+            <groupId>com.queryeer.backend</groupId>
+            <artifactId>backend-lib-queryengine-jdbc-foundation</artifactId>
+            <version>${queryeer.backend.version}</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- TEST -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.mockito</groupId>
+            <artifactId>mockito-core</artifactId>
+            <version>${mockito.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.xerial</groupId>
+            <artifactId>sqlite-jdbc</artifactId>
+            <version>${sqlite.jdbc.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+            </resource>
+            <resource>
+                <directory>${project.build.directory}/generated-resources/changelog</directory>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <!-- Generates the plugin's changelog from git history; registered with the host so it shows in About -->
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+                <executions>
+                    <execution>
+                        <id>generate-changelog</id>
+                        <phase>generate-resources</phase>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                        <configuration>
+                            <executable>node</executable>
+                            <workingDirectory>${maven.multiModuleProjectDirectory}</workingDirectory>
+                            <arguments>
+                                <argument>shared/scripts/generate-changelog.mjs</argument>
+                                <argument>plugins/sqlite</argument>
+                                <argument>${project.build.directory}/generated-resources/changelog/com/queryeer/plugin/jdbc/sqlite/CHANGELOG.md</argument>
+                            </arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <!-- Runtime dependencies end up in target/lib and are packaged into the plugin ZIP's lib/ -->
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-runtime-dependencies</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy-dependencies</goal>
+                        </goals>
+                        <configuration>
+                            <outputDirectory>${project.build.directory}/lib</outputDirectory>
+                            <includeScope>runtime</includeScope>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
+</project>
