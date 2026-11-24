@@ -31,7 +31,9 @@
     "mysql:package": "npm run mysql:build && node shared/scripts/package-plugin.mjs plugins/mysql && npm run mysql:verify",
     "mysql:dev": "node shared/scripts/dev-frontend.mjs plugins/mysql",
     "mysql:smoke": "node plugins/mysql/scripts/smoke-backend.mjs",
-    "mysql:verify": "node shared/scripts/verify-package.mjs plugins/mysql --expect-jar queryeer-jdbc-mysql-plugin-"
+    "mysql:verify": "node shared/scripts/verify-package.mjs plugins/mysql --expect-jar queryeer-jdbc-mysql-plugin-",
+    "catalog:generate": "node shared/scripts/generate-catalog.mjs",
+    "catalog:test": "node --test shared/scripts/catalog.test.mjs"
   },
   "devDependencies": {
     "ajv": "^8.17.1"

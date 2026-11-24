@@ -7,11 +7,11 @@ Verified plugins for [Queryeer Desktop](https://github.com/kuseman/queryeer-desk
 | MongoDB | `com.queryeer.mongodb` | [`plugins/mongodb`](plugins/mongodb/README.md) | Released: native MongoDB query engine |
 | MySQL and MariaDB | `com.queryeer.jdbc.mysql` | [`plugins/mysql`](plugins/mysql/README.md) | Released: dialect for Queryeer's JDBC engine |
 | Kafka | `com.queryeer.kafka` | [`plugins/kafka`](plugins/kafka/README.md) | Released: connections and the payloadbuilder kafka catalog (Queryeer 0.23) |
-| Elasticsearch | `com.queryeer.elasticsearch` | [`plugins/elasticsearch`](plugins/elasticsearch/README.md) | In development: connections and the payloadbuilder elasticsearch catalog, migrated from Queryeer's own (Queryeer 0.23) |
+| Elasticsearch | `com.queryeer.elasticsearch` | [`plugins/elasticsearch`](plugins/elasticsearch/README.md) | Released: connections and the payloadbuilder elasticsearch catalog, migrated from Queryeer's own (Queryeer 0.23) |
 
-Current versions are on the [Releases](../../releases) page; the [catalog](#repository-and-releases) will list them once it exists.
+Every released version is listed in the [catalog](specs/plugin-catalog.md), `https://kuseman.github.io/queryeer-desktop-plugins/catalog/list.json`, and on the [Releases](../../releases) page.
 
-Each plugin is built, versioned and released independently. Queryeer discovers verified plugins through [`catalog/index.json`](#repository-and-releases), so users never need to add several repositories.
+Each plugin is built, versioned and released independently. Queryeer's release bundles plugins from the catalog, and Queryeer will discover verified plugins through it, so users never need to add several repositories.
 
 ## Repository and Releases
 
@@ -28,10 +28,9 @@ queryeer-desktop-plugins/
     kafka/              Kafka connections and the payloadbuilder kafka catalog; same layout
     elasticsearch/      Elasticsearch connections and the payloadbuilder elasticsearch catalog; same layout
   shared/
-    schema/             vendored copy of Queryeer's plugin.json v1 schema
-    scripts/            packaging, package verification, ZIP writer, Maven runner, changelog
+    schema/             vendored copy of Queryeer's plugin.json v1 schema, and the catalog's schema
+    scripts/            packaging, package verification, ZIP writer, Maven runner, changelog, catalog generator
   dist/                 build output (git-ignored)
-  catalog/index.json    verified-plugin catalog read by Queryeer (planned)
   .github/CODEOWNERS    per-plugin ownership (planned)
 ```
 
@@ -64,28 +63,9 @@ The vendored schema in `shared/schema/` must be refreshed whenever Queryeer chan
      - Run by hand, it is a dry run that keeps the ZIP and the notes as run artifacts.
 
   The first workflow needs a `RELEASE_TOKEN` secret: pushes made with the default `GITHUB_TOKEN` start no other workflows, and `master` is protected.
-- **Catalog** (planned): after publishing, the release workflow will update `catalog/index.json`. The catalog is served from a stable URL (GitHub Pages or a raw URL on `master`).
+- **Catalog:** after publishing, the release workflow starts [publish-catalog.yml](.github/workflows/publish-catalog.yml), which builds `catalog/list.json` from the GitHub Releases and deploys it to GitHub Pages. The format, the checks and how readers use it are in [specs/plugin-catalog.md](specs/plugin-catalog.md).
 - **No "latest release" lookups:** GitHub tracks one latest release per repository, not per plugin, so clients never call `/releases/latest`. They read the catalog.
-
-Catalog format:
-
-```json
-{
-  "plugins": [
-    {
-      "id": "com.queryeer.mongodb",
-      "name": "MongoDB",
-      "version": "0.1.0",
-      "url": "https://github.com/<owner>/queryeer-desktop-plugins/releases/download/mongodb/v0.1.0/com.queryeer.mongodb-0.1.0.zip",
-      "sha256": "<hex>",
-      "minApiVersion": "0.19.0",
-      "prerelease": false
-    }
-  ]
-}
-```
-
-- **Listing a plugin:** a reviewed pull request to the catalog. A third-party entry may point at a release asset in another repository.
+- **Listing a plugin:** today every catalog entry comes from this repository's releases. Third-party entries, each pointing at a release asset in its own repository, are planned as a reviewed list merged into the catalog.
 - **Plugin issues:** they are labelled per plugin.
 
 ## GitHub Releases Follow-up
@@ -93,7 +73,7 @@ Catalog format:
 GitHub support belongs in Queryeer Desktop after local packaging has been proven. The intended flow is:
 
 ```text
-catalog/index.json (verified plugins and their release URLs)
+catalog/list.json (verified plugins and their release URLs)
   -> GitHub release asset
   -> Queryeer downloads the ZIP and checks it against the catalog sha256
   -> existing staged ZIP installation pipeline
@@ -110,7 +90,7 @@ The catalog is the contract between Queryeer and plugin distribution. Queryeer r
 The release asset conventions and the use of the catalog sha256 are settled above. Before automatic updates are introduced, Queryeer still needs to define:
 
 - semantic-version comparison
-- how `minApiVersion` is enforced (today `apiVersion` is not enforced during discovery)
+- how the version ranges in a catalog entry's `manifest` are checked before offering it (core does not enforce `frontend.apiVersion` yet; 0.24 is proposed to)
 - prerelease opt-in policy
 - downgrade behaviour
 - the catalog's own trust model, such as whether the catalog is signed
