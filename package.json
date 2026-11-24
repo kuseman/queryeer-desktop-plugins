@@ -38,6 +38,12 @@
     "sqlite:package": "npm run sqlite:build && node shared/scripts/package-plugin.mjs plugins/sqlite && npm run sqlite:verify",
     "sqlite:dev": "node shared/scripts/dev-frontend.mjs plugins/sqlite",
     "sqlite:verify": "node shared/scripts/verify-package.mjs plugins/sqlite --expect-jar queryeer-jdbc-sqlite-plugin-",
+    "postgres:test": "npm run postgres:frontend:test && node shared/scripts/mvnw.mjs -pl plugins/postgres/backend -am verify",
+    "postgres:frontend:test": "npm run typecheck -w @queryeer-plugins/postgres-frontend && npm run test -w @queryeer-plugins/postgres-frontend",
+    "postgres:build": "node shared/scripts/mvnw.mjs -pl plugins/postgres/backend -am clean package -DskipTests && npm run build -w @queryeer-plugins/postgres-frontend",
+    "postgres:package": "npm run postgres:build && node shared/scripts/package-plugin.mjs plugins/postgres && npm run postgres:verify",
+    "postgres:dev": "node shared/scripts/dev-frontend.mjs plugins/postgres",
+    "postgres:verify": "node shared/scripts/verify-package.mjs plugins/postgres --expect-jar queryeer-jdbc-postgres-plugin- --expect-jar jackson-databind-",
     "catalog:generate": "node shared/scripts/generate-catalog.mjs",
     "catalog:test": "node --test shared/scripts/catalog.test.mjs"
   },
