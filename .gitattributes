@@ -1,0 +1,6 @@
+# Shell scripts run in WSL, Linux and macOS straight from a Windows checkout: always LF, whatever core.autocrlf says
+mvnw text eol=lf
+*.sh text eol=lf
+.mvn/wrapper/maven-wrapper.properties text eol=lf
+# cmd needs CRLF
+*.cmd text eol=crlf

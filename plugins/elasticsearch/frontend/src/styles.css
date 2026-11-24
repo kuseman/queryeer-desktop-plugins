@@ -1,0 +1,43 @@
+/* Detail fields of the connections settings. The list itself is the host's CollectionSettingsListEditor.
+   Uses the host theme variables documented as stable in DEVELOPMENT-PLUGIN.md. */
+
+.qes-settings { display: grid; gap: 8px; }
+.qes-muted { font-size: var(--ui-font-size-sm, 12px); color: var(--text-1); }
+
+.qes-detail { display: grid; gap: 8px; }
+.qes-field { display: grid; gap: 3px; }
+.qes-label { font-size: var(--ui-font-size-sm, 12px); color: var(--text-1); }
+.qes-input {
+  width: 100%; box-sizing: border-box; min-height: 28px; padding: 4px 8px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--input-bg, var(--bg-0)); color: var(--text-0);
+}
+.qes-input:focus { outline: none; border-color: var(--focus-border, var(--accent)); }
+.qes-check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ui-font-size-sm, 12px); color: var(--text-1); }
+.qes-button {
+  min-height: 26px; padding: 2px 10px; border: 1px solid var(--border); border-radius: 4px;
+  background: var(--surface-1, var(--bg-1)); color: var(--text-0); cursor: pointer;
+}
+.qes-button:disabled { opacity: 0.6; cursor: default; }
+.qes-test { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.qes-ok { color: #66bb6a; font-size: var(--ui-font-size-sm, 12px); }
+.qes-error { color: #e57373; font-size: 11px; }
+.qes-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+/* The catalog panel's index field: free text with a suggestion list that understands patterns */
+.qes-combobox { position: relative; }
+.qes-combobox-field { display: flex; align-items: stretch; }
+.qes-combobox-field .payloadbuilder-catalog-input { flex: 1; min-width: 0; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.qes-combobox-toggle {
+  width: 26px; padding: 0; border: 1px solid var(--border); border-left: none; border-radius: 0 4px 4px 0;
+  background: var(--surface-1, var(--bg-1)); color: var(--text-1); cursor: pointer;
+}
+.qes-combobox-toggle:disabled { opacity: 0.5; cursor: default; }
+.qes-combobox-hint { margin-top: 3px; font-size: 11px; color: var(--text-1); }
+.qes-combobox-popup {
+  position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin-top: 2px;
+  border: 1px solid var(--border); border-radius: 4px; background: var(--bg-0); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+.qes-combobox-summary { padding: 4px 8px; font-size: 11px; color: var(--text-1); border-bottom: 1px solid var(--border); }
+.qes-combobox-list { list-style: none; margin: 0; padding: 2px 0; max-height: 220px; overflow-y: auto; }
+.qes-combobox-option { padding: 3px 8px; cursor: pointer; color: var(--text-0); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qes-combobox-option-active { background: var(--list-hover-bg, var(--surface-1, var(--bg-1))); }
