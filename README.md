@@ -6,7 +6,8 @@ Verified plugins for [Queryeer Desktop](https://github.com/kuseman/queryeer-desk
 |---|---|---|---|
 | MongoDB | `com.queryeer.mongodb` | [`plugins/mongodb`](plugins/mongodb/README.md) | Released: native MongoDB query engine |
 | MySQL and MariaDB | `com.queryeer.jdbc.mysql` | [`plugins/mysql`](plugins/mysql/README.md) | Released: dialect for Queryeer's JDBC engine |
-| SQLite | `com.queryeer.jdbc.sqlite` | [`plugins/sqlite`](plugins/sqlite/README.md) | In development: dialect for Queryeer's JDBC engine, moved out of Queryeer's core (Queryeer 0.24) |
+| SQLite | `com.queryeer.jdbc.sqlite` | [`plugins/sqlite`](plugins/sqlite/README.md) | Released: dialect for Queryeer's JDBC engine, moved out of Queryeer's core (Queryeer 0.24) |
+| PostgreSQL | `com.queryeer.jdbc.postgres` | [`plugins/postgres`](plugins/postgres/README.md) | In development: dialect with query plans for Queryeer's JDBC engine, moved out of Queryeer's core (Queryeer 0.24) |
 | Kafka | `com.queryeer.kafka` | [`plugins/kafka`](plugins/kafka/README.md) | Released: connections and the payloadbuilder kafka catalog (Queryeer 0.23) |
 | Elasticsearch | `com.queryeer.elasticsearch` | [`plugins/elasticsearch`](plugins/elasticsearch/README.md) | Released: connections and the payloadbuilder elasticsearch catalog, migrated from Queryeer's own (Queryeer 0.23) |
 
@@ -27,6 +28,7 @@ queryeer-desktop-plugins/
     mongodb/            plugin.json, backend/ (Maven module), frontend/ (npm workspace), README
     mysql/              MySQL and MariaDB dialect for the JDBC engine; same layout
     sqlite/             SQLite dialect for the JDBC engine, moved out of core; same layout
+    postgres/           PostgreSQL dialect with query plans for the JDBC engine, moved out of core; same layout
     kafka/              Kafka connections and the payloadbuilder kafka catalog; same layout
     elasticsearch/      Elasticsearch connections and the payloadbuilder elasticsearch catalog; same layout
   shared/
