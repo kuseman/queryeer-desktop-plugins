@@ -174,7 +174,11 @@ Work in Queryeer Desktop. Nothing moves yet.
 - **No runtime change:** the app bundles the packages as dependencies, as it does the folders today.
 - **Every import that no longer compiles is a gap:** it is made public in `@queryeer/api` or in the engine's API package, or it becomes unnecessary. Each one is recorded in `API-GAPS.md`.
 - **Order:** after 0.20.0, one family at a time. JDBC first (the MySQL dialect already exercises its API), then payloadbuilder.
-- **Backend side:** split `jdbc-foundation` into an API and its implementation (§5 rule 1). The modules are already isolated.
+- **Backend side: no new artifact.** `backend-lib-queryengine-jdbc-foundation` is already the published API that dialects compile against, so it stays the API artifact; its implementation moves into the engine (§5 rule 1). **Done 2026-11-24 in core** (`feature/api-0.24.0`):
+  - moved into `backend-plugin-jdbc`, package-private in `com.queryeer.backend.plugin.jdbc`, which the engine doesn't export: `DefaultJdbcDialectRegistry`, `DefaultJdbcRuntimeService`, `FileFormatDetector`
+  - deleted, unused: `InMemorySqlParseSessionStore`, `JdbcSchemaObjectFactory`
+  - stays as API: everything else, including `AbstractJdbcQueryExecutor`, `CancellableJdbcQueryExecutor`, `JdbcDialectSupport` and `JdbcDriverLoader`, which the built-in dialects and the MySQL plugin use
+  - the engine's export, `com.queryeer.backend.queryengine.jdbc.`, now covers only the API
 - Every internal listed in §2 is either public or no longer needed, and `API-GAPS.md` has no open P1.
 - **Plugins that stay in core:** a lint rule forbids imports from `core/` and `renderer/` in their folders, to keep them honest. The moving families don't need it; their package boundary is stricter.
 - Exit: each moving family is its own workspace package in core that compiles against `@queryeer/api` and its engine's API package alone. Phase 1 then moves the packages (`git mv`) together with their Maven modules.
@@ -242,10 +246,10 @@ Foundations are code that other plugins build on: the JDBC foundation, the SQL p
 ### Decision (2026-11-16): APIs are exported through dependencies
 
 **How a plugin uses another plugin's API**, taking a JDBC dialect or a third-party plugin as the example:
-1. The JDBC plugin publishes its API to Maven Central as its own artifact (e.g. `jdbc-api`).
+1. The JDBC plugin publishes its API to Maven Central as its own artifact (`backend-lib-queryengine-jdbc-foundation`).
 2. The JDBC plugin exports the API's packages in its `plugin.json` (`backend.exports`).
 3. At activation, the JDBC plugin registers the implementation through the plugin context: `services().register(JdbcRuntimeService.class, …)`.
-4. The dialect compiles against `jdbc-api` with `provided` scope and does not bundle it.
+4. The dialect compiles against that artifact with `provided` scope and does not bundle it.
 5. The dialect declares the dependency in `plugin.json`: `{ "id": "queryengine.jdbc", "version": "^1.2" }`.
 6. At runtime, the dialect's class loader gets the API classes from the JDBC plugin's class loader, and `services().get(JdbcRuntimeService.class)` returns the JDBC plugin's instance.
 
@@ -280,11 +284,11 @@ If the ecosystem were to stay first-party, the shared layer would be enough. Thi
 
 ### Rules for an exported API
 
-1. **Export an API, not the implementation.** Today's `jdbc-foundation` also holds implementation, such as `JdbcDriverLoader`. Split it: a small API artifact with interfaces and value types, and the implementation private inside the plugin. Only the API has to stay stable; everything else can change.
+1. **Export an API, not the implementation.** The API artifact holds interfaces, value types and the helpers dependents use (base classes, `JdbcDriverLoader`); the implementation stays private inside the plugin, in a package it doesn't export. Only the API has to stay stable; everything else can change. For JDBC that artifact is the existing `backend-lib-queryengine-jdbc-foundation`, with its implementation moved out (§4, Phase 0.4), so no new artifact is published.
 2. **No third-party types in the API.** If the API returns a parser or a connection-pool type, dependents need that library visible too, and a dependent that bundles another version of it gets a class that does not match. JDK types (`java.sql.Connection`) are fine.
-3. **One version number for the API artifact and the plugin.** Release `jdbc-api` 1.2.0 with the JDBC plugin 1.2.0. Then the Maven version a dependent compiles against and the range it declares in `plugin.json` are the same number.
+3. **One version number for the API artifact and the plugin.** Release the JDBC API artifact 1.2.0 with the JDBC plugin 1.2.0. Then the Maven version a dependent compiles against and the range it declares in `plugin.json` are the same number.
 4. **SemVer for the API.** Within a major version, an exported API only grows. Removals follow the deprecation policy (Phase 3).
-5. **Guard against bundling.** This repository's package check refuses a ZIP whose `lib/` contains a jar it should only reference through a dependency, e.g. `jdbc-api-*.jar` inside a dialect. That turns a confusing runtime failure into a build error.
+5. **Guard against bundling.** This repository's package check refuses a ZIP whose `lib/` contains a jar it should only reference through a dependency, e.g. `backend-lib-queryengine-jdbc-foundation-*.jar` inside a dialect. That turns a confusing runtime failure into a build error.
 6. **The frontend follows the same pattern.** A dialect's frontend registers with the JDBC frontend. Since 0.20.0 it does that through members of core's `PluginContext` (`context.jdbcDialects`, `jdbcDrivers`, `jdbcTreeActions`, `jdbcTreeContextMenu`), with their types in `@queryeer/api` (`API-GAPS.md` F28). The equivalent is:
    - a types-only npm package to compile against: `@queryeer/jdbc-api`, and `@queryeer/payloadbuilder-api` for catalogs
    - an object the JDBC plugin offers through the frontend plugin context, found by the dependent through its declared dependency
@@ -300,7 +304,7 @@ Each exported API is published to Maven Central (backend) and npm (frontend type
 **What this repository needs for Maven publishing:**
 - Central credentials and a GPG key as secrets, and the `release.yml` publishing steps from core: a dry run, refusing duplicate uploads, and recovery.
 - A "prepare for next development iteration" step for the `pom.xml` of whatever is published to Maven. The root README already says so. Plugins that only ship ZIPs keep working without it.
-- An API artifact shares its plugin's tag (`jdbc/v1.2.0` releases the JDBC plugin ZIP and `jdbc-api` 1.2.0 together), following rule 3 above.
+- An API artifact shares its plugin's tag (`jdbc/v1.2.0` releases the JDBC plugin ZIP and its API artifact 1.2.0 together), following rule 3 above.
 - Order inside a release: publish the API to Central first, then the plugin's GitHub Release. Dependent plugins are released afterwards, built against the published API.
 - The `0-SNAPSHOT` root POM becomes a problem once anything is published, because a published POM must not name a SNAPSHOT parent. Either give the root POM a real released version, or flatten published POMs (`flatten-maven-plugin`).
 
