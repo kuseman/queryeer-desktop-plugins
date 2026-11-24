@@ -15,16 +15,15 @@ permissions:
   contents: read
 
 jobs:
-  publish:
-    name: Publish catalog
+  # Built and deployed in separate jobs: deploy-pages run in the job that uploaded the artifact can look it up before
+  # it is visible and fail with "No artifacts named github-pages" (actions/deploy-pages#451)
+  build:
+    name: Build catalog
     runs-on: ubuntu-24.04
     permissions:
       contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}catalog/list.json
+      # configure-pages reads the site's URL
+      pages: read
     steps:
       - name: Refuse other branches
         if: github.ref != 'refs/heads/master'
@@ -71,6 +70,17 @@ jobs:
         with:
           path: dist/pages
 
+  deploy:
+    name: Publish catalog
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}catalog/list.json
+    steps:
       - name: Deploy
         id: deploy
         uses: actions/deploy-pages@v4
