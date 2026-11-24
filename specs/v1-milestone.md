@@ -211,8 +211,8 @@ Without engines in core, a fresh install needs plugins from somewhere.
   - the installer carries a pinned set of plugin ZIPs and installs them on first run, unless a newer version is already installed
   - after that they update on their own
   - offline and proxied corporate installs work, because nothing is downloaded on first run
-- **The catalog** (`catalog/index.json`, already designed in the root README): Queryeer reads it to list verified plugins and offer updates.
-  - The release workflow updates it after publishing (TODO §8, "Later").
+- **The catalog** (`catalog/list.json`, [plugin-catalog.md](plugin-catalog.md)): Queryeer reads it to list verified plugins and offer updates, and Queryeer's release reads it to pick the bundled plugins.
+  - **Done 2026-11-24:** the release workflow publishes it to GitHub Pages after each release. No reader uses it yet.
 - **Decisions the README lists as open:**
   - update checks and how they are shown
   - prerelease opt-in

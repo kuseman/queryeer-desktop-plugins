@@ -1,0 +1,76 @@
+name: Publish Catalog
+
+# Builds catalog/list.json from this repository's GitHub Releases and deploys it to GitHub Pages
+# (specs/plugin-catalog.md). release-plugin.yml starts it on master after each release; run it by hand to rebuild.
+# Pages must use "GitHub Actions" as its source (Settings -> Pages).
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish catalog
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}catalog/list.json
+    steps:
+      - name: Refuse other branches
+        if: github.ref != 'refs/heads/master'
+        run: |
+          echo "::error::The catalog is published from master only."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Test the generator
+        run: npm run catalog:test
+
+      - name: Setup Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      # The published catalog's entries are reused, so only new releases' ZIPs are downloaded
+      - name: Generate catalog
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node shared/scripts/generate-catalog.mjs \
+            --previous "${{ steps.pages.outputs.base_url }}/catalog/list.json" \
+            --out dist/pages/catalog/list.json
+          touch dist/pages/.nojekyll
+          {
+            echo "### Catalog"
+            echo
+            node -e 'const c = require("./dist/pages/catalog/list.json"); for (const p of c.plugins) console.log(`- ${p.id}: ${p.versions.map((v) => v.version).join(", ")}`)'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist/pages
+
+      - name: Deploy
+        id: deploy
+        uses: actions/deploy-pages@v4
