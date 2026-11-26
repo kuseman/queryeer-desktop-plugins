@@ -34,7 +34,7 @@ The plugin depends on public plugin APIs added to Queryeer Desktop in `@queryeer
 
 ## PayloadBuilder catalog
 
-With Queryeer's payloadbuilder engine installed (an optional dependency, `queryengine.payloadbuilder` / `core.queryengine.payloadbuilder`), the plugin registers the `mongodb` catalog on both sides. It replaces Queryeer's built-in `mongodb` catalog, keeping its id and its `mongo` default alias, so payloadbuilder files keep their catalog; only the connection is picked again, from this plugin's connections.
+With Queryeer's payloadbuilder engine installed (an optional dependency, `queryengine.payloadbuilder` / `core.queryengine.payloadbuilder`), the plugin registers the `mongodb` catalog on both sides. It replaces Queryeer's built-in `mongodb` catalog (since Queryeer 0.24 it is the only one), keeping its id and its `mongo` default alias, so payloadbuilder files keep their catalog; only the connection is picked again, from this plugin's connections.
 
 - **Backend:** `PayloadbuilderMongoCatalog`, started by `DependencyExtension.whenDependencyActive`, registers `PayloadbuilderMongoCatalogProvider`, which hands payloadbuilder's `MongoCatalog` (bundled, `payloadbuilder-catalog-mongodb`) a connection string and credentials from the plugin's settings. Only these two classes refer to payloadbuilder types, so the plugin loads and works without payloadbuilder. The catalog uses this plugin's MongoDB driver; a container test runs a payloadbuilder query through it against every supported server version.
 - **Frontend:** `payloadbuilderCatalog.tsx`, registered when `context.isDependencyActive("core.queryengine.payloadbuilder")`.
