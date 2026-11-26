@@ -8,6 +8,7 @@ Verified plugins for [Queryeer Desktop](https://github.com/kuseman/queryeer-desk
 | MySQL and MariaDB | `com.queryeer.jdbc.mysql` | [`plugins/mysql`](plugins/mysql/README.md) | Released: dialect for Queryeer's JDBC engine |
 | SQLite | `com.queryeer.jdbc.sqlite` | [`plugins/sqlite`](plugins/sqlite/README.md) | Released: dialect for Queryeer's JDBC engine, moved out of Queryeer's core (Queryeer 0.24) |
 | PostgreSQL | `com.queryeer.jdbc.postgres` | [`plugins/postgres`](plugins/postgres/README.md) | Released: dialect with query plans for Queryeer's JDBC engine, moved out of Queryeer's core (Queryeer 0.24) |
+| SQL Server | `com.queryeer.jdbc.sqlserver` | [`plugins/sqlserver`](plugins/sqlserver/README.md) | In development: dialect with query plans and Windows authentication for Queryeer's JDBC engine, moved out of Queryeer's core (Queryeer 0.24) |
 | Kafka | `com.queryeer.kafka` | [`plugins/kafka`](plugins/kafka/README.md) | Released: connections and the payloadbuilder kafka catalog (Queryeer 0.23) |
 | Elasticsearch | `com.queryeer.elasticsearch` | [`plugins/elasticsearch`](plugins/elasticsearch/README.md) | Released: connections and the payloadbuilder elasticsearch catalog, migrated from Queryeer's own (Queryeer 0.23) |
 
@@ -29,6 +30,7 @@ queryeer-desktop-plugins/
     mysql/              MySQL and MariaDB dialect for the JDBC engine; same layout
     sqlite/             SQLite dialect for the JDBC engine, moved out of core; same layout
     postgres/           PostgreSQL dialect with query plans for the JDBC engine, moved out of core; same layout
+    sqlserver/          SQL Server dialect with query plans and Windows authentication for the JDBC engine, moved out of core; same layout
     kafka/              Kafka connections and the payloadbuilder kafka catalog; same layout
     elasticsearch/      Elasticsearch connections and the payloadbuilder elasticsearch catalog; same layout
   shared/
@@ -49,7 +51,7 @@ The vendored schema in `shared/schema/` must be refreshed whenever Queryeer chan
 - **Ranges on Queryeer:** the plugins here accept every Queryeer from the one they need up to 1.0, e.g. `">=0.20.0 <1.0.0"` on `queryengine.jdbc` and in `frontend.apiVersion`, rather than `^0.20.0`, which would need a plugin release for each core minor version. They are maintained alongside core and run against each new core in development, where ranges aren't enforced anyway. The cost: a core change that breaks a plugin shows as a runtime error rather than a clean skip. So before a core release, build and test the plugins against it (`npm run <plugin>:test` with `queryeer.backend.version` and `@queryeer/api` bumped). Raise the lower bound when a plugin starts using something newer.
 - **Tags:** `<short-name>/v<semver>`, e.g. `mongodb/v0.1.0`.
 - **Release assets:** `<plugin-id>-<version>.zip` plus `<plugin-id>-<version>.zip.sha256`, e.g. `com.queryeer.mongodb-0.1.0.zip`. Each tag gets its own GitHub Release; prereleases use GitHub's prerelease flag.
-- **CI:** one workflow per plugin, filtered by path, so a change under `plugins/mongodb/**` builds and tests only MongoDB ([mongodb.yml](.github/workflows/mongodb.yml), and likewise [mysql.yml](.github/workflows/mysql.yml), [sqlite.yml](.github/workflows/sqlite.yml), [postgres.yml](.github/workflows/postgres.yml), [kafka.yml](.github/workflows/kafka.yml) and [elasticsearch.yml](.github/workflows/elasticsearch.yml): typecheck, unit tests, Testcontainers tests where the plugin has them (not SQLite or PostgreSQL), package and verify; the ZIP is uploaded as a build artifact). A tag push builds only the tagged plugin (see Releasing below).
+- **CI:** one workflow per plugin, filtered by path, so a change under `plugins/mongodb/**` builds and tests only MongoDB ([mongodb.yml](.github/workflows/mongodb.yml), and likewise [mysql.yml](.github/workflows/mysql.yml), [sqlite.yml](.github/workflows/sqlite.yml), [postgres.yml](.github/workflows/postgres.yml), [sqlserver.yml](.github/workflows/sqlserver.yml), [kafka.yml](.github/workflows/kafka.yml) and [elasticsearch.yml](.github/workflows/elasticsearch.yml): typecheck, unit tests, Testcontainers tests where the plugin has them (not SQLite or PostgreSQL), package and verify; the ZIP is uploaded as a build artifact). A tag push builds only the tagged plugin (see Releasing below).
   - The plugin API comes from npm (`@queryeer/api`) and Maven Central (`backend-api`, `backend-contract`), so CI needs no Queryeer Desktop checkout.
 - **Releasing** works like Queryeer Desktop's, in two steps:
   1. **Create Plugin Release** ([create-plugin-release.yml](.github/workflows/create-plugin-release.yml), run by hand on `master`):
