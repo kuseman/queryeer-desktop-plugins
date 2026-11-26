@@ -10,7 +10,7 @@ Elasticsearch connections for Queryeer Desktop, and payloadbuilder's `elasticsea
   - connect and read timeouts in milliseconds; empty uses payloadbuilder's defaults (500 ms and 15 s);
   - passwords are kept in the Queryeer vault, never in settings;
   - **Test connection** shows the cluster's name and Elasticsearch version, also for a connection that isn't saved yet.
-- **The `elasticsearch` payloadbuilder catalog**, when payloadbuilder is installed (an optional dependency). It replaces Queryeer's built-in one.
+- **The `elasticsearch` payloadbuilder catalog**, when payloadbuilder is installed (an optional dependency). It replaces Queryeer's built-in one; since Queryeer 0.24 it is the only one.
   - The catalog panel picks the connection and, optionally, an index: free text, so a pattern such as `logs-*` works too. **Reload indices** (or the field's ▾) lists the cluster's aliases, data streams and indices as suggestions; hidden ones (`.security`, ...) are left out. A pattern filters them as Elasticsearch would read it, and the field says how many indices it matches.
   - Tables: `es#_doc` (with the panel's index) and the other tables and functions of payloadbuilder's es catalog.
   - Table completion and hover come from the catalog's system tables.
@@ -23,7 +23,7 @@ On its first start the plugin copies Queryeer's own Elasticsearch connections (`
 - **Connection ids stay the same**, so files that use the `elasticsearch` catalog keep their connection: nothing to pick again.
 - **Each password gets its own vault entry.** Editing the plugin's connection never changes Queryeer's, and the copy works while the vault is locked.
 - **A password stored as plain text** (only possible by editing the settings JSON by hand) is not copied. That connection is migrated without it; enter the password again.
-- Queryeer's own settings are left as they are, so uninstalling the plugin brings the built-in catalog back with its connections. Edits made after the migration are not synced between the two.
+- Queryeer's own settings are left as they are. Before Queryeer 0.24, uninstalling the plugin brings the built-in catalog back with its connections; edits made after the migration are not synced between the two. Queryeer 0.24 no longer has the built-in catalog, and the plugin still copies its saved connections on the first start.
 
 ## Building
 

@@ -10,7 +10,7 @@ Kafka connections for Queryeer Desktop, and payloadbuilder's `kafka` catalog ove
   - SASL `OAUTHBEARER` and `GSSAPI` with a whole JAAS configuration (optional for GSSAPI, which may be set up for the JVM);
   - passwords and JAAS configurations are kept in the Queryeer vault, never in settings;
   - **Test connection** asks the cluster for its id and brokers, also for a connection that isn't saved yet.
-- **The `kafka` payloadbuilder catalog**, when payloadbuilder is installed (an optional dependency). It replaces Queryeer's built-in one, so files that use the `kafka` catalog keep working after picking one of the plugin's connections.
+- **The `kafka` payloadbuilder catalog**, when payloadbuilder is installed (an optional dependency). It replaces Queryeer's built-in one (since Queryeer 0.24 it is the only one), so files that use the `kafka` catalog keep working after picking one of the plugin's connections.
   - The catalog panel picks the connection and, optionally, a topic. **Reload topics** lists the cluster's topics.
   - Tables: `kafka#topic.<name>` (or `kafka#topic` with the panel's topic), `kafka#metadata.topics`, `kafka#metadata.partitions` and the other tables of payloadbuilder's kafka catalog.
   - Table completion and hover come from the catalog's system tables.
