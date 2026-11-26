@@ -19,6 +19,7 @@ on:
           - mongodb
           - mysql
           - postgres
+          - sqlserver
           - sqlite
       increment:
         description: Version component to increment (ignored for a plugin's first release, which uses plugin.json's version)

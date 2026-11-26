@@ -1,0 +1,43 @@
+{
+  "$schema": "../../shared/schema/plugin.json.schema.v1.json",
+  "schemaVersion": 1,
+  "id": "com.queryeer.jdbc.sqlserver",
+  "name": "SQL Server",
+  "version": "0.1.0",
+  "description": "SQL Server dialect for Queryeer Desktop's JDBC query engine, with estimated and actual query plans and Windows authentication",
+  "dependencies": [
+    {
+      "id": "queryengine.jdbc",
+      "version": ">=0.24.0 <1.0.0"
+    }
+  ],
+  "providesCapabilities": [
+    "queryengine.jdbc.dialect.sqlserver"
+  ],
+  "requiredCapabilities": [
+    "queryengine.jdbc.connection"
+  ],
+  "backend": {
+    "entrypointClass": "com.queryeer.plugin.jdbc.sqlserver.SqlServerBackendPlugin",
+    "minJavaVersion": "25"
+  },
+  "frontend": {
+    "entryModule": "./frontend/dist/index.js",
+    "moduleFormat": "esm",
+    "apiVersion": ">=0.24.0 <1.0.0"
+  },
+  "runtime": {
+    "shared": {
+      "parentFirstPackagePrefixes": ["com.microsoft.sqlserver.jdbc."],
+      "nativeLibraries": [
+        {
+          "os": "windows",
+          "arch": "any",
+          "searchPaths": ["libNative"],
+          "filePatterns": ["mssql-jdbc_auth*.dll", "sqljdbc_auth.dll"],
+          "required": false
+        }
+      ]
+    }
+  }
+}

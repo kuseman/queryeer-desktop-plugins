@@ -56,9 +56,8 @@ if (!manifestData) {
   if (basename(zipPath) !== expectedName) {
     problems.push(`file name ${basename(zipPath)} should be ${expectedName}`);
   }
-  if (manifest.runtime) {
-    problems.push("runtime is reserved for builtin plugins");
-  }
+  // runtime.shared (parent-first driver packages, native libraries to preload) applies to installed plugins since
+  // Queryeer 0.24. The schema check above covers it; the backend validates it again when it reads the manifest.
 
   if (manifest.backend) {
     if (manifest.backend.classpath) {

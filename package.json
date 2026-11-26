@@ -44,6 +44,12 @@
     "postgres:package": "npm run postgres:build && node shared/scripts/package-plugin.mjs plugins/postgres && npm run postgres:verify",
     "postgres:dev": "node shared/scripts/dev-frontend.mjs plugins/postgres",
     "postgres:verify": "node shared/scripts/verify-package.mjs plugins/postgres --expect-jar queryeer-jdbc-postgres-plugin- --expect-jar jackson-databind-",
+    "sqlserver:test": "npm run sqlserver:frontend:test && node shared/scripts/mvnw.mjs -pl plugins/sqlserver/backend -am verify",
+    "sqlserver:frontend:test": "npm run typecheck -w @queryeer-plugins/sqlserver-frontend && npm run test -w @queryeer-plugins/sqlserver-frontend",
+    "sqlserver:build": "node shared/scripts/mvnw.mjs -pl plugins/sqlserver/backend -am clean package -DskipTests && npm run build -w @queryeer-plugins/sqlserver-frontend",
+    "sqlserver:package": "npm run sqlserver:build && node shared/scripts/package-plugin.mjs plugins/sqlserver && npm run sqlserver:verify",
+    "sqlserver:dev": "node shared/scripts/dev-frontend.mjs plugins/sqlserver",
+    "sqlserver:verify": "node shared/scripts/verify-package.mjs plugins/sqlserver --expect-jar queryeer-jdbc-sqlserver-plugin-",
     "catalog:generate": "node shared/scripts/generate-catalog.mjs",
     "catalog:test": "node --test shared/scripts/catalog.test.mjs"
   },

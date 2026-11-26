@@ -19,6 +19,7 @@ on:
           - mongodb
           - mysql
           - postgres
+          - sqlserver
           - sqlite
       dry_run:
         description: Build and check without publishing (manual runs must be dry runs; push a tag to publish)
