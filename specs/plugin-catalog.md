@@ -1,6 +1,6 @@
 # Plugin catalog
 
-Status: format 1, implemented 2026-11-24. The catalog is published from this repository; no client reads it yet.
+Status: format 1, implemented 2026-11-24. The catalog is published from this repository; Queryeer Desktop's release reads it from 0.24 to pick the plugins it bundles.
 
 The catalog is one JSON file that lists every released plugin version with where to download it and its sha256. It is the contract between plugin distribution and its readers:
 
@@ -82,12 +82,16 @@ Run it locally with `npm run catalog:generate`. It needs no token for a public r
 
 ### Queryeer Desktop's release (bundling)
 
+Implemented by `queryeer-desktop/packages/app/scripts/bundle-plugins.mjs`, for the ids in `packages/app/bundled-plugins.json`:
+
 1. Read the catalog. Fail the release when it can't be read or its `schemaVersion` is unknown.
 2. For each bundled plugin id, take the newest version that:
    - is not a prerelease
-   - is compatible with the app being released, by its `manifest`
-3. Download the ZIP from `url` and check it against `sha256`; fail the release on a mismatch.
-4. Write the chosen id, version, URL and sha256 to `bundled-plugins.lock.json`, which ships with the release; the recover workflows reuse it rather than resolving again.
+   - is compatible with the app being released, by its `manifest`: `frontend.apiVersion` and the version ranges of required dependencies against the release version (a dependency on another bundled plugin against the version chosen for it), and `backend.minJavaVersion` against the Java the release ships. `requiredCapabilities` aren't checked.
+
+   A plugin that isn't in the catalog or has no compatible version fails the release, so release a plugin before the core release that bundles it.
+3. Download the ZIP from `url` and check it against `sha256` and `size`; fail the release on a mismatch.
+4. Write the ZIPs and `bundled-plugins.lock.json` (`{ "schemaVersion": 1, "plugins": [{ "id", "version", "file", "sha256", "url" }] }`, `file` being the ZIP's name next to the lock), which ship with the release. One job of the release picks them, and every platform build copies that bundle, so all platforms ship the same versions. The recover workflows republish the release's installers and never pick again.
 5. A bundled plugin can only use core API that was already released, because core publishes its Maven and npm API in the same release run. A plugin that needs new core API is bundled from the next core release on.
 
 ### Queryeer (updates and the marketplace, later)
