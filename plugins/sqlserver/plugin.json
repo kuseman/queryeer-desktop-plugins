@@ -28,13 +28,20 @@
   },
   "runtime": {
     "shared": {
-      "parentFirstPackagePrefixes": ["com.microsoft.sqlserver.jdbc."],
+      "parentFirstPackagePrefixes": [
+        "com.microsoft.sqlserver.jdbc."
+      ],
       "nativeLibraries": [
         {
           "os": "windows",
           "arch": "any",
-          "searchPaths": ["libNative"],
-          "filePatterns": ["mssql-jdbc_auth*.dll", "sqljdbc_auth.dll"],
+          "searchPaths": [
+            "libNative"
+          ],
+          "filePatterns": [
+            "mssql-jdbc_auth*.dll",
+            "sqljdbc_auth.dll"
+          ],
           "required": false
         }
       ]
